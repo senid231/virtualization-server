@@ -12,7 +12,7 @@ module NeptuneNetworks::Virtualization
       end
 
       # Create a new virtual machine
-      post '/virtual_machines/:uuid' do
+      post '/virtual_machines' do
         #TODO
       end
 
