@@ -27,11 +27,11 @@ module NeptuneNetworks::Virtualization
         domain = domain_or_404!
 
         operation = case data[:state]
-                    when 'start'
+                    when 'started'
                       :create
-                    when 'stop'
+                    when 'stopped'
                       :shutdown
-                    when 'halt'
+                    when 'halted'
                       :destroy
                     else
                       halt 422
