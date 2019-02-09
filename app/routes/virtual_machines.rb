@@ -24,11 +24,6 @@ module NeptuneNetworks::Virtualization
 
       # Update an existing virtual machine
       patch '/virtual_machines/:uuid' do
-        #TODO
-      end
-
-      # Change the state of the virtual machine
-      put '/virtual_machines/:uuid' do
         operation = case data[:state]
                     when 'start'
                       :create
