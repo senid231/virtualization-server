@@ -5,48 +5,16 @@ module NeptuneNetworks::Virtualization
         content_type :json
       end
 
-      # https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState
-      STATES = {
-        0 => "no state",
-        1 => "running",
-        2 => "blocked on resource",
-        3 => "paused by user",
-        4 => "being shut down",
-        5 => "shut off",
-        6 => "crashed",
-        7 => "suspended by guest power management",
-      }
-
       # List all virtual machines
       get '/virtual_machines' do
         domains = libvirt.list_all_domains
-        domains.map do |domain|
-          state = STATES[domain.state.first]
-          cpu_count = state == 'running' ? domain.max_vcpus : domain.vcpus.count
-
-          {
-            name: domain.name,
-            uuid: domain.uuid,
-            state: state,
-            cpus: cpu_count,
-            memory: domain.max_memory,
-          }.to_json
-        end
+        Models::VirtualMachine.from_libvirt(domains).to_json
       end
 
       # Show a single virtual machine
       get '/virtual_machines/:uuid' do
         domain = libvirt.lookup_domain_by_uuid(params[:uuid])
-        state = STATES[domain.state.first]
-        cpu_count = state == 'running' ? domain.max_vcpus : domain.vcpus.count
-
-        {
-          name: domain.name,
-          uuid: domain.uuid,
-          state: state,
-          cpus: cpu_count,
-          memory: domain.max_memory,
-        }.to_json
+        Models::VirtualMachine.from_libvirt(domain).to_json
       end
 
       # Create a new virtual machine
