@@ -23,8 +23,36 @@ module NeptuneNetworks::Virtualization
       end
 
       # Update an existing virtual machine
-      put '/virtual_machines/:uuid' do
+      patch '/virtual_machines/:uuid' do
         #TODO
+      end
+
+      # Change the state of the virtual machine
+      put '/virtual_machines/:uuid' do
+        operation = case data[:state]
+                    when 'start'
+                      :create
+                    when 'stop'
+                      :shutdown
+                    when 'halt'
+                      :destroy
+                    else
+                      halt 422
+                    end
+
+        domain = libvirt.lookup_domain_by_uuid(params[:uuid])
+
+        begin
+          domain.public_send(operation)
+        rescue Libvirt::Error => exception
+          case exception.libvirt_code
+          when 55
+            # Already in the requested state
+            status 200
+          else
+            raise
+          end
+        end
       end
 
       # Delete a virtual machine
@@ -33,6 +61,10 @@ module NeptuneNetworks::Virtualization
       end
 
       private
+
+      def data
+        @data ||= JSON.parse(request.body.read, symbolize_names: true)
+      end
 
       def libvirt
         @libvirt ||= Libvirt::open('qemu:///session')
