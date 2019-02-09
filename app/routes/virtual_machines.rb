@@ -13,7 +13,7 @@ module NeptuneNetworks::Virtualization
 
       # Show a single virtual machine
       get '/virtual_machines/:uuid' do
-        domain = libvirt.lookup_domain_by_uuid(params[:uuid])
+        domain = domain_or_404!
         Models::VirtualMachine.from_libvirt(domain).to_json
       end
 
@@ -24,6 +24,8 @@ module NeptuneNetworks::Virtualization
 
       # Update an existing virtual machine
       patch '/virtual_machines/:uuid' do
+        domain = domain_or_404!
+
         operation = case data[:state]
                     when 'start'
                       :create
@@ -34,8 +36,6 @@ module NeptuneNetworks::Virtualization
                     else
                       halt 422
                     end
-
-        domain = libvirt.lookup_domain_by_uuid(params[:uuid])
 
         begin
           domain.public_send(operation)
@@ -52,10 +52,19 @@ module NeptuneNetworks::Virtualization
 
       # Delete a virtual machine
       delete '/virtual_machines/:uuid' do
-        #TODO
+        domain_or_404!
       end
 
       private
+
+      def domain_or_404!
+        libvirt.lookup_domain_by_uuid(params[:uuid])
+      rescue => exception
+        case exception.libvirt_code
+        when 8
+          halt 404
+        end
+      end
 
       def data
         @data ||= JSON.parse(request.body.read, symbolize_names: true)
