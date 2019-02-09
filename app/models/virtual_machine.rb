@@ -50,13 +50,15 @@ module NeptuneNetworks::Virtualization
         end
       end
 
-      attr_reader :uuid, :state, :cpu_count, :memory_size
+      attr_reader :uuid, :state, :cpu_count, :memory_size, :nics, :disks
 
-      def initialize(uuid:, state:, cpu_count:, memory_size:)
+      def initialize(uuid:, state:, cpu_count:, memory_size:, nics: [], disks: [])
         @uuid         = uuid
         @state        = state
         @cpu_count    = cpu_count
         @memory_size  = memory_size
+        @nics         = nics
+        @disks        = disks
       end
 
       def to_json(opts = nil)
@@ -65,7 +67,72 @@ module NeptuneNetworks::Virtualization
           state: state,
           cpu_count: cpu_count,
           memory_size: memory_size,
+          nics: nics.map(&:to_json),
+          disks: disks.map(&:to_json)
         }.to_json
+      end
+
+      def to_xml
+        [metadata_xml, nics_xml, disks_xml, closing_xml].join
+      end
+
+      private
+
+      def metadata_xml
+        <<~XML
+          <domain type='kvm'>
+            <name>#{uuid}</name>
+            <uuid>#{uuid}</uuid>
+            <memory>#{memory_size}</memory>
+            <currentMemory>#{memory_size}</currentMemory>
+            <vcpu>#{cpu_count}</vcpu>
+            <os>
+              <type arch='x86_64' machine='pc'>hvm</type>
+              <boot dev='hd'/>
+            </os>
+            <features>
+              <acpi/>
+              <apic/>
+              <pae/>
+            </features>
+            <clock offset='localtime'/>
+            <on_poweroff>preserve</on_poweroff>
+            <on_reboot>restart</on_reboot>
+            <on_crash>restart</on_crash>
+            <devices>
+        XML
+      end
+
+      def closing_xml
+        <<~XML
+            <graphics type='vnc' port='-1' autoport='yes' passwd='virtualmachinesarecool'/>
+          </devices>
+        </domain>
+        XML
+      end
+
+      def nics_xml
+        nics.map do |nic|
+          <<~XML
+            <interface type='bridge'>
+              <source bridge='#{nic.bridge}'/>
+              <mac address="#{nic.mac_address}"/>
+              <model type='virtio'/>
+            </interface>
+          XML
+        end
+      end
+
+      def disks_xml
+        disks.map do |disk|
+          <<~XML
+            <disk type='file' device='disk'>
+              <driver name="qemu" type="qcow2"/>
+              <source file='#{disk.path}'/>
+              <target dev='hda' bus='ide'/>
+            </disk>
+          XML
+        end
       end
     end
   end
