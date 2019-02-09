@@ -20,11 +20,15 @@ module NeptuneNetworks::Virtualization
       # List all virtual machines
       get '/virtual_machines' do
         domains = libvirt.list_all_domains
-        resp = domains.map do |domain|
+        domains.map do |domain|
+          state = STATES[domain.state.first]
+          cpu_count = state == 'running' ? domain.max_vcpus : domain.vcpus.count
+
           {
             name: domain.name,
-            state: STATES[domain.state.first],
-            cpus: domain.max_vcpus,
+            uuid: domain.uuid,
+            state: state,
+            cpus: cpu_count,
             memory: domain.max_memory,
           }.to_json
         end
@@ -32,7 +36,17 @@ module NeptuneNetworks::Virtualization
 
       # Show a single virtual machine
       get '/virtual_machines/:uuid' do
-        libvirt.lookup_domain_by_uuid(params[:uuid])
+        domain = libvirt.lookup_domain_by_uuid(params[:uuid])
+        state = STATES[domain.state.first]
+        cpu_count = state == 'running' ? domain.max_vcpus : domain.vcpus.count
+
+        {
+          name: domain.name,
+          uuid: domain.uuid,
+          state: state,
+          cpus: cpu_count,
+          memory: domain.max_memory,
+        }.to_json
       end
 
       # Create a new virtual machine
