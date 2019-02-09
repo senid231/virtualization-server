@@ -52,7 +52,9 @@ module NeptuneNetworks::Virtualization
 
       # Delete a virtual machine
       delete '/virtual_machines/:uuid' do
-        domain_or_404!
+        domain = domain_or_404!
+        domain.destroy if domain.active?
+        domain.undefine
       end
 
       private
@@ -62,6 +64,8 @@ module NeptuneNetworks::Virtualization
       rescue => exception
         case exception.libvirt_code
         when 8
+          halt 404
+        when 42
           halt 404
         end
       end
