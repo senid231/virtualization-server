@@ -73,6 +73,7 @@ module NeptuneNetworks::Virtualization
       end
 
       def to_xml
+        nic_xml = nics.map(&:to_xml).join
         [metadata_xml, nics_xml, disks_xml, closing_xml].join
       end
 
@@ -109,18 +110,6 @@ module NeptuneNetworks::Virtualization
           </devices>
         </domain>
         XML
-      end
-
-      def nics_xml
-        nics.map do |nic|
-          <<~XML
-            <interface type='bridge'>
-              <source bridge='#{nic.bridge}'/>
-              <mac address="#{nic.mac_address}"/>
-              <model type='virtio'/>
-            </interface>
-          XML
-        end
       end
 
       def disks_xml
