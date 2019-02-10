@@ -16,8 +16,8 @@ class NetworkInterface
   def as_json
     {
       uuid: uuid,
-      mac_address: mac_address,
       source: source,
+      mac_address: mac_address,
     }
   end
 
