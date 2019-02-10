@@ -7,3 +7,7 @@ gem 'dotenv'
 gem 'sinatra'
 gem 'ruby-libvirt'
 gem 'pry'
+
+group :test do
+  gem 'rspec'
+end
