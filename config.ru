@@ -1,3 +1,3 @@
-require_relative 'app/api'
+require File.expand_path('../app', __FILE__)
 
-run NeptuneNetworks::Virtualization::API
+run NeptuneNetworks::VirtualizationServer::API
