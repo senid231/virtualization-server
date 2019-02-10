@@ -187,7 +187,10 @@ script/bootstrap
 
 ### Running the server
 
+The server requires libvirt installed on your computer, assuming that you are running on a Mac, you should be able to get everything running by running:
+
 ```
+brew install libvirt qemu
 script/server
 ```
 
