@@ -92,7 +92,7 @@ class VirtualMachine
 
   def metadata_xml
     <<~XML
-      <domain type='#{NeptuneNetworks::VirtualizationServer.libvirt_domain_type}'>
+      <domain type='#{VirtualizationServer.libvirt_domain_type}'>
         <name>#{uuid}</name>
         <uuid>#{uuid}</uuid>
         <memory>#{memory_size}</memory>

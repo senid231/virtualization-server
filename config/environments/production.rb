@@ -1,3 +1,1 @@
-module NeptuneNetworks
-  VirtualizationServer.libvirt_domain_type = 'kvm'
-end
+VirtualizationServer.libvirt_domain_type = 'kvm'

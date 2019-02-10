@@ -2,6 +2,8 @@
 
 This application provides a REST API that communicates with the libvirt daemon to create, modify, and delete virtual machines.
 
+It assumes that you have libvirt installed and configured along the lines of [this](https://brooks.sh/2017/12/22/configuring-kvm-on-clear-linux/) blog post.
+
 ## API Documentation
 
 ### Virtual Machines

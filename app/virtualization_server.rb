@@ -1,11 +1,9 @@
-module NeptuneNetworks
-  class VirtualizationServer
-    class << self
-      attr_accessor :libvirt_domain_type
+class VirtualizationServer
+  class << self
+    attr_accessor :libvirt_domain_type
 
-      def environment
-        ENV.fetch('RACK_ENV')
-      end
+    def environment
+      ENV.fetch('RACK_ENV')
     end
   end
 end
