@@ -25,6 +25,7 @@ module Routes
 
       if domain = libvirt.define_domain_xml(vm.to_xml)
         domain.create
+        status 201
         vm.to_json
       else
         halt 422
