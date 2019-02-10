@@ -45,10 +45,10 @@ RSpec.describe Disk do
   describe '#to_xml' do
     it 'returns an XML representation of the disk for libvirt' do
       expected_xml = <<~XML
-        <disk type='file' device='disk'>
+        <disk type="file" device="disk">
           <driver name="qemu" type="qcow2"/>
-          <source file='/var/lib/libvirt/images/1067e21a-f965-4dc5-914d-d481e3ed7af0.qcow2'/>
-          <target dev='hda' bus='ide'/>
+          <source file="/var/lib/libvirt/images/1067e21a-f965-4dc5-914d-d481e3ed7af0.qcow2"/>
+          <target dev="hda" bus="ide"/>
         </disk>
       XML
 

@@ -45,8 +45,8 @@ RSpec.describe NetworkInterface do
   describe '#to_xml' do
     it 'returns an XML representation of the NIC for libvirt' do
       expected_xml = <<~XML
-        <interface type='bridge'>
-          <source bridge='kvm_bridge'/>
+        <interface type="bridge">
+          <source bridge="kvm_bridge"/>
           <mac address="02:6f:cc:f3:04:81"/>
           <model type='virtio'/>
         </interface>

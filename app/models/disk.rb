@@ -25,10 +25,10 @@ class Disk
 
   def to_xml
     <<~XML
-      <disk type='file' device='disk'>
+      <disk type="file" device="disk">
         <driver name="qemu" type="qcow2"/>
-        <source file='#{path}'/>
-        <target dev='hda' bus='ide'/>
+        <source file="#{path}"/>
+        <target dev="hda" bus="ide"/>
       </disk>
     XML
   end

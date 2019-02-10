@@ -23,8 +23,8 @@ class NetworkInterface
 
   def to_xml
     <<~XML
-      <interface type='bridge'>
-        <source bridge='#{source}'/>
+      <interface type="bridge">
+        <source bridge="#{source}"/>
         <mac address="#{mac_address}"/>
         <model type='virtio'/>
       </interface>
