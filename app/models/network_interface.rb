@@ -3,10 +3,24 @@ module NeptuneNetworks::Virtualization
     class NetworkInterface
       DEFAULT_SOURCE = 'kvm_bridge'.freeze
 
-      def initialize(uuid:, source: DEFAULT_SOURCE, mac_address:)
+      attr_reader :uuid, :source, :mac_address
+
+      def initialize(uuid: SecureRandom.uuid, source: DEFAULT_SOURCE, mac_address: generate_mac_address)
         @uuid         = uuid
         @source       = source
-        @mac_address  = mac_address || generate_mac_address
+        @mac_address  = mac_address
+      end
+
+      def to_json(opts = nil)
+        as_json.to_json
+      end
+
+      def as_json
+        {
+          uuid: uuid,
+          mac_address: mac_address,
+          source: source,
+        }
       end
 
       def to_xml

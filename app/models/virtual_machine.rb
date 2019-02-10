@@ -52,7 +52,7 @@ module NeptuneNetworks::Virtualization
 
       attr_reader :uuid, :state, :cpu_count, :memory_size, :nics, :disks
 
-      def initialize(uuid:, state:, cpu_count:, memory_size:, nics: [], disks: [])
+      def initialize(uuid: SecureRandom.uuid, state: nil, cpu_count:, memory_size:, nics: build_nics, disks: build_disks)
         @uuid         = uuid
         @state        = state
         @cpu_count    = cpu_count
@@ -62,26 +62,39 @@ module NeptuneNetworks::Virtualization
       end
 
       def to_json(opts = nil)
+        as_json.to_json
+      end
+
+      def as_json
         {
           uuid: uuid,
           state: state,
           cpu_count: cpu_count,
           memory_size: memory_size,
-          nics: nics.map(&:to_json),
-          disks: disks.map(&:to_json)
-        }.to_json
+          nics: nics.map(&:as_json),
+          disks: disks.map(&:as_json)
+        }
       end
 
       def to_xml
-        nic_xml = nics.map(&:to_xml).join
+        nics_xml = nics.map(&:to_xml).join
+        disks_xml = disks.map(&:to_xml).join
         [metadata_xml, nics_xml, disks_xml, closing_xml].join
       end
 
       private
 
+      def build_nics
+        [Models::NetworkInterface.new]
+      end
+
+      def build_disks
+        [Models::Disk.new]
+      end
+
       def metadata_xml
         <<~XML
-          <domain type='kvm'>
+          <domain type='qemu'>
             <name>#{uuid}</name>
             <uuid>#{uuid}</uuid>
             <memory>#{memory_size}</memory>
@@ -110,18 +123,6 @@ module NeptuneNetworks::Virtualization
           </devices>
         </domain>
         XML
-      end
-
-      def disks_xml
-        disks.map do |disk|
-          <<~XML
-            <disk type='file' device='disk'>
-              <driver name="qemu" type="qcow2"/>
-              <source file='#{disk.path}'/>
-              <target dev='hda' bus='ide'/>
-            </disk>
-          XML
-        end
       end
     end
   end

@@ -2,6 +2,8 @@ require 'sinatra'
 require 'libvirt'
 
 require_relative 'models'
+require_relative 'models/disk'
+require_relative 'models/network_interface'
 require_relative 'models/virtual_machine'
 
 require_relative 'routes'

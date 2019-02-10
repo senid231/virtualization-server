@@ -19,7 +19,17 @@ module NeptuneNetworks::Virtualization
 
       # Create a new virtual machine
       post '/virtual_machines' do
-        #TODO
+        vm = Models::VirtualMachine.new(
+          cpu_count: data[:cpu_count],
+          memory_size: data[:memory_size],
+        )
+
+        if domain = libvirt.define_domain_xml(vm.to_xml)
+          domain.create
+          vm.to_json
+        else
+          halt 422
+        end
       end
 
       # Update an existing virtual machine
