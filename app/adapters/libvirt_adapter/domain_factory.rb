@@ -1,6 +1,6 @@
 module LibvirtAdapter
   class DomainFactory
-    def initialize(memory: 1_048_576, cpus: 1)
+    def initialize(memory: 1024 * 1024 * 1, cpus: 1)
       @id     = SecureRandom.uuid
       @memory = memory
       @cpus   = cpus
