@@ -132,7 +132,7 @@ $ curl -s http://localhost:4567/virtual_machines/2de02519-c347-432c-9923-3753c35
 
 | Name | Type | Description |
 |------|------|-------------|
-| `state` | `string` | The state of the virtual machine. Can be one of `started`, `stopped` (graceful), or `halted` (forced).
+| `state` | `string` | The state of the virtual machine. Can be one of `started`, `shutdown` (graceful), or `halted` (forced).
 
 Response:
 
