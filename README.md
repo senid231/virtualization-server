@@ -29,21 +29,8 @@ Response:
   {
     "uuid": "2de02519-c347-432c-9923-3753c3538e02",
     "state": "shut off",
-    "cpu_count": 2,
-    "memory_size": 8388608,
-    "nics": [
-      {
-        "uuid": "82df3d26-764e-4748-9a4b-d530a99f664d",
-        "mac_address": "02:df:38:20:b3:f9",
-        "source": "kvm_bridge"
-      }
-    ],
-    "disks": [
-      {
-        "uuid": "3fd739d9-ae7a-4304-b0ad-c92b9ee9c138",
-        "size": 10485760
-      }
-    ]
+    "cpus": 2,
+    "memory": 8388608
   }
 ]
 ```
@@ -66,21 +53,8 @@ Response:
 {
   "uuid": "2de02519-c347-432c-9923-3753c3538e02",
   "state": "shut off",
-  "cpu_count": 2,
-  "memory_size": 8388608,
-  "nics": [
-    {
-      "uuid": "82df3d26-764e-4748-9a4b-d530a99f664d",
-      "mac_address": "02:df:38:20:b3:f9",
-      "source": "kvm_bridge"
-    }
-  ],
-  "disks": [
-    {
-      "uuid": "3fd739d9-ae7a-4304-b0ad-c92b9ee9c138",
-      "size": 10485760
-    }
-  ]
+  "cpus": 2,
+  "memory": 8388608
 }
 ```
 
@@ -89,7 +63,7 @@ Response:
 Request:
 
 ```
-$ curl -s http://localhost:4567/virtual_machines -X POST -d '{"cpu_count": 2, "memory_size": 8388608}'
+$ curl -s http://localhost:4567/virtual_machines -X POST -d '{"cpus": 2, "memory": 8388608}'
 ```
 
 Response:
@@ -102,21 +76,8 @@ Response:
 {
   "uuid": "2de02519-c347-432c-9923-3753c3538e02",
   "state": "shut off",
-  "cpu_count": 2,
-  "memory_size": 8388608,
-  "nics": [
-    {
-      "uuid": "82df3d26-764e-4748-9a4b-d530a99f664d",
-      "mac_address": "02:df:38:20:b3:f9",
-      "source": "kvm_bridge"
-    }
-  ],
-  "disks": [
-    {
-      "uuid": "3fd739d9-ae7a-4304-b0ad-c92b9ee9c138",
-      "size": 10485760
-    }
-  ]
+  "cpus": 2,
+  "memory": 8388608
 }
 ```
 
@@ -144,21 +105,8 @@ Response:
 {
   "uuid": "2de02519-c347-432c-9923-3753c3538e02",
   "state": "started",
-  "cpu_count": 2,
-  "memory_size": 8388608,
-  "nics": [
-    {
-      "uuid": "82df3d26-764e-4748-9a4b-d530a99f664d",
-      "mac_address": "02:df:38:20:b3:f9",
-      "source": "kvm_bridge"
-    }
-  ],
-  "disks": [
-    {
-      "uuid": "3fd739d9-ae7a-4304-b0ad-c92b9ee9c138",
-      "size": 10485760
-    }
-  ]
+  "cpus": 2,
+  "memory": 8388608
 }
 ```
 

@@ -60,8 +60,6 @@ class VirtualMachine
       state: @state,
       cpus: @cpus,
       memory: @memory,
-      #nics: nics.map(&:as_json),
-      #disks: disks.map(&:as_json)
     }
   end
 
