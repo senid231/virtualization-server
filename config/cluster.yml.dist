@@ -1,0 +1,5 @@
+hypervisors:
+  - id: 1
+    name: hypervisor.libvirt
+    uri: 'qemu+tcp://hypervisor.libvirt:16509/system'
+

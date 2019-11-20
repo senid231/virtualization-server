@@ -1,31 +1,41 @@
 class VirtualMachine
   extend Forwardable
 
+  attr_reader :id, :name, :cpus, :memory, :state, :hypervisor, :xml
+
   ADAPTER_CLASS = LibvirtAdapter::Domain
 
-  def self.all
+  @hash={}
+  @cache=[]
+
+  def self.load_from_hypervisors
+
+    @hash={}
+    @cache=[]
+
     ADAPTER_CLASS.all.map do |vm|
-      new(
+      v = new(
         id: vm.id,
+        name: vm.name,
+        hypervisor: vm.hypervisor,
         state: vm.state,
         cpus: vm.cpus,
         memory: vm.memory,
-        adapter: vm
+        adapter: vm,
+        xml: vm.xml
       )
+      @cache.push(v)
+      @hash[vm.id] = v
     end
+    return @cache
+  end
+
+  def self.all
+    return @cache
   end
 
   def self.find_by(id:)
-    vm = ADAPTER_CLASS.find_by(id: id)
-    return unless vm
-
-    new(
-      id: vm.id,
-      state: vm.state,
-      cpus: vm.cpus,
-      memory: vm.memory,
-      adapter: vm
-    )
+    return @hash[id]
   end
 
   def self.create(attrs)
@@ -33,6 +43,8 @@ class VirtualMachine
 
     new(
       id: vm.id,
+      name: vm.name,
+      hypervisor: vm.hypervisor,
       state: vm.state,
       cpus: vm.cpus,
       memory: vm.memory,
@@ -40,30 +52,22 @@ class VirtualMachine
     )
   end
 
-  def initialize(id:, state: nil, cpus:, memory:, adapter: ADAPTER)
+  def initialize(id:, name:, hypervisor:, state: nil, cpus:, memory:, adapter: ADAPTER, xml:)
     @id       = id
+    @name     = name
+    @hypervisor = hypervisor
     @state    = state
     @cpus     = cpus
     @memory   = memory
     @adapter  = adapter
+    @xml = xml
   end
 
-  def_delegators :adapter, :start, :shutdown, :halt, :update, :destroy
 
-  def to_json(opts = nil)
-    as_json.to_json
+  def tags
+
   end
 
-  def as_json
-    {
-      id: @id,
-      state: @state,
-      cpus: @cpus,
-      memory: @memory,
-    }
-  end
 
-  private
 
-  attr_reader :adapter
 end

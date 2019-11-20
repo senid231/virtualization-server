@@ -1,3 +1,4 @@
+require 'pp'
 module LibvirtAdapter
   class Domain
     # https://libvirt.org/html/libvirt-libvirt-domain.html#virDomainState
@@ -13,54 +14,82 @@ module LibvirtAdapter
     }
 
     def self.all
-      CLIENT.list_all_domains.map { |domain| new(domain) }
+      domains=[]
+      ::Configuration.instance.hypervisors.each do |hv|
+        hv.connection.list_all_domains.map do |domain|
+          p domain.methods.inspect
+          domains.push new(domain,hv)
+        end
+      end
+
+      return domains
     end
 
     def self.find_by(id:)
-      vm = CLIENT.lookup_domain_by_uuid(id)
-      new(vm)
-    rescue Libvirt::RetrieveError
-      nil
-    end
-
-    def self.create(attrs)
-      factory = DomainFactory.new(memory: attrs[:memory], cpus: attrs[:cpus])
-      domain  = CLIENT.define_domain_xml(factory.to_xml)
-      new(domain)
-    end
-
-    def initialize(domain)
-      @domain = domain
-    end
-
-    def start
-      domain.create
-    rescue Libvirt::Error => exception
-      case exception.libvirt_message
-      when 'Requested operation is not valid: domain is already running'
-        return domain
+      domains=[]
+      ::Configuration.instance.hypervisors.each do |hv|
+        vm = hv.connection.lookup_domain_by_uuid(id)
+        unless vm.nil?
+          return new(vm,hv)
+        end
       end
     end
 
-    def shutdown
-      domain.shutdown if running?
+    # def self.create(attrs)
+    #   factory = DomainFactory.new(memory: attrs[:memory], cpus: attrs[:cpus])
+    #   domain  = CLIENT.define_domain_xml(factory.to_xml)
+    #   new(domain)
+    # end
+
+    def initialize(domain,hypervisor)
+      @domain = domain
+      @hypervisor = hypervisor
     end
 
-    def halt
-      domain.destroy if running?
-    end
-
-    def update
-      raise NotImplementedError
-    end
-
-    def destroy
-      shutdown if running?
-      domain.undefine
-    end
+    # def start
+    #   domain.create
+    # rescue Libvirt::Error => exception
+    #   case exception.libvirt_message
+    #   when 'Requested operation is not valid: domain is already running'
+    #     return domain
+    #   end
+    # end
+    #
+    # def shutdown
+    #   domain.shutdown if running?
+    # end
+    #
+    # def halt
+    #   domain.destroy if running?
+    # end
+    #
+    # def update
+    #   raise NotImplementedError
+    # end
+    #
+    # def destroy
+    #   shutdown if running?
+    #   domain.undefine
+    # end
 
     def id
       domain.uuid
+    end
+
+    def name
+      domain.name
+    end
+
+    def hostname
+      domain.hostname
+    end
+
+    def hypervisor
+      @hypervisor
+    end
+
+    def xml
+      domain.xml_desc
     end
 
     def state
