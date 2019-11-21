@@ -9,6 +9,7 @@ gem 'ruby-libvirt'
 gem 'pry'
 gem 'sinja'
 gem 'jsonapi-serializers'
+gem 'activesupport'
 
 group :test do
   gem 'rspec'
