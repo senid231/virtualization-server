@@ -51,10 +51,13 @@ class Hypervisor
     @name = name
     @uri = uri
 
-    connection.domain_event_register_any(
-        Libvirt::Connect::DOMAIN_EVENT_ID_REBOOT,
-        method(:dom_event_callback_reboot).to_proc
-    )
+    @thread = Thread.new do
+      connection.domain_event_register_any(
+          Libvirt::Connect::DOMAIN_EVENT_ID_REBOOT,
+          method(:dom_event_callback_reboot).to_proc
+      )
+    end
+    @thread.abort_on_exception = true
   end
 
   def connection

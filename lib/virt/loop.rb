@@ -148,6 +148,7 @@ module Virt
         puts "Virt::Loop IO.select"
         events = IO.select(@pollin, @pollout, @pollerr)
       else
+        puts "Virt::Loop IO.select sleep #{sleep}"
         events = IO.select(@pollin, @pollout, @pollerr, sleep)
       end
 
@@ -160,7 +161,7 @@ module Virt
         (events[0] + events[1] + events[2]).each do |io|
           if io.fileno == @rdpipe.fileno
             @pending_wakeup = false
-            pipe = @rdpipe.read(1)
+            @rdpipe.read(1)
             next
           end
 
@@ -198,7 +199,7 @@ module Virt
       # write a byte to the internal pipe to wake up "run_once" for recalculation.
       # See initialize for more information about the internal pipe
       puts "Virt::Loop#interrupt"
-      if @running_poll and not @pending_wakeup
+      if @running_poll && !@pending_wakeup
         @pending_wakeup = true
         @wrpipe.write('c')
       end
