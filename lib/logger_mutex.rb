@@ -1,7 +1,8 @@
 class LoggerMutex
   attr_reader :mutex
 
-  def initialize
+  def initialize(class_name = nil)
+    @class_name = class_name
     @mutex = Mutex.new
   end
 
@@ -17,7 +18,8 @@ class LoggerMutex
   private
 
   def dbg(msg)
-    meth_name = caller.first.match(/`(.+)'/)[2]
-    AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}::#{meth_name} #{msg}" }
+    meth_name = caller.first.match(/`(.+)'/)[1]
+    from_meth_name = caller.second.match(/`(.+)'/)[1]
+    AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}::#{meth_name} (#{@class_name}##{from_meth_name}) #{msg}" }
   end
 end
