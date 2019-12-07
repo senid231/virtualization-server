@@ -54,7 +54,7 @@ class Hypervisor
     @uri = uri
 
     #force connect to initialize events callbacks
-    connection
+    event_connection
 
   end
 
@@ -69,6 +69,11 @@ class Hypervisor
   def connection
     dbg "connection #{@connection}"
     @connection ||= _open_connection
+  end
+
+  def event_connection
+    dbg "connection #{@event_connection}"
+    @event_connection ||= _open_connection(true)
   end
 
   def to_json(_opts = nil)
@@ -88,7 +93,7 @@ class Hypervisor
     dbg "#{id} #{conn}, dom #{dom}, opaque #{opaque}"
   end
 
-  def _open_connection()
+  def _open_connection(register_events = false)
     if self.class._storage&.libvirt_rw
       dbg "#{id} Opening RW connection to #{name}"
       c = Libvirt::open(uri)
@@ -118,7 +123,7 @@ class Hypervisor
     @total_memory = node_info.memory
     @free_memory = node_info.memory
 
-    register_connection_event_callbacks(c)
+    register_connection_event_callbacks(c) if register_events
 
     c
   end
