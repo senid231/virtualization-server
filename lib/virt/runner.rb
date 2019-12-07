@@ -11,6 +11,7 @@ module Virt
         @loop.run_loop
       end
       @thread.abort_on_exception = true
+      @thread.name = "Virt::Loop"
     end
   end
 end

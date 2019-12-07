@@ -10,6 +10,7 @@ gem 'pry'
 gem 'sinja'
 gem 'jsonapi-serializers'
 gem 'activesupport'
+gem 'epoll'
 
 group :test do
   gem 'rspec'

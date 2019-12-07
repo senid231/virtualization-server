@@ -47,20 +47,27 @@ class Hypervisor
   end
 
   def initialize(id, name, uri)
+    puts "#{Time.now.strftime('%H:%M:%S')} [#{Process.pid}/0x#{Thread.current.object_id.to_s(16)}/0x#{self.object_id.to_s(16)}] Hypervisor#initialize #{id} #{name} #{uri}"
+
     @id = id
     @name = name
     @uri = uri
 
-    @thread = Thread.new do
-      connection.domain_event_register_any(
+    #force connect to initialize events callbacks
+    connection
+
+  end
+
+  def register_connection_event_callbacks(c)
+      puts "#{Time.now.strftime('%H:%M:%S')} [#{Process.pid}/0x#{Thread.current.object_id.to_s(16)}/0x#{self.object_id.to_s(16)}] Hypervisor::register_connection_event_callbacks #{c}"
+      c.domain_event_register_any(
           Libvirt::Connect::DOMAIN_EVENT_ID_REBOOT,
           method(:dom_event_callback_reboot).to_proc
       )
-    end
-    @thread.abort_on_exception = true
   end
 
   def connection
+    puts "#{Time.now.strftime('%H:%M:%S')} [#{Process.pid}/0x#{Thread.current.object_id.to_s(16)}/0x#{self.object_id.to_s(16)}] Hypervisor::connection #{@connection}"
     @connection ||= _open_connection
   end
 
@@ -81,7 +88,7 @@ class Hypervisor
     puts "Hypervisor(#{id})#dom_event_callback_reboot: conn #{conn}, dom #{dom}, opaque #{opaque}"
   end
 
-  def _open_connection
+  def _open_connection()
     if self.class._storage&.libvirt_rw
       puts "Hypervisor #{id} Opening RW connection to #{name}"
       c = Libvirt::open(uri)
@@ -92,12 +99,13 @@ class Hypervisor
 
     puts "Hypervisor #{id} connected"
 
-    #c.keepalive=[10,2]
+    c.keepalive=[10,2]
 
     @version = c.version
     @libversion = c.libversion
     @hostname = c.hostname
     @max_vcpus = c.max_vcpus
+    @capabilities = c.capabilities
 
     node_info = c.node_info
     @cpu_model = node_info.model
@@ -109,7 +117,8 @@ class Hypervisor
     @cpu_threads = node_info.threads
     @total_memory = node_info.memory
     @free_memory = node_info.memory
-    @capabilities = c.capabilities
+
+    register_connection_event_callbacks(c)
 
     c
   end
