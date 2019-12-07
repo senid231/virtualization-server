@@ -72,7 +72,7 @@ module Virt
       @timers = []
       @next_timer_id = 1
 
-      @mutex = LoggerMutex.new
+      @mutex = LoggerMutex.new(self.class.name)
       @epoll = Epoll.create
 
       # a bit of oddness having to do with signalling.  Since signals are
