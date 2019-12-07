@@ -1,8 +1,10 @@
 require 'yaml'
+require 'lib/app_logger'
 require 'lib/hypervisor'
 require 'lib/virt/runner'
 
-puts Libvirt::version()
+AppLogger.setup_logger(STDOUT, level: Logger::Severity::DEBUG)
+AppLogger.info { Libvirt::version() }
 
 # VIRT_RUNNER = Virt::Runner.new.run
 # clusters = YAML.load_file(File.join(__dir__, '..', 'cluster.yml'))
