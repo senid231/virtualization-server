@@ -5,6 +5,7 @@
 
 require 'libvirt'
 require 'epoll'
+require_relative '../logger_mutex'
 
 module Virt
   class Loop
@@ -71,7 +72,7 @@ module Virt
       @timers = []
       @next_timer_id = 1
 
-      @mutex = Mutex.new
+      @mutex = LoggerMutex.new
       @epoll = Epoll.create
 
       # a bit of oddness having to do with signalling.  Since signals are
