@@ -54,7 +54,7 @@ class Hypervisor
     @uri = uri
 
     #force connect to initialize events callbacks
-    event_connection
+    connection
 
   end
 
@@ -68,12 +68,7 @@ class Hypervisor
 
   def connection
     dbg "connection #{@connection}"
-    @connection ||= _open_connection
-  end
-
-  def event_connection
-    dbg "connection #{@event_connection}"
-    @event_connection ||= _open_connection(true)
+    @connection ||= _open_connection(true)
   end
 
   def to_json(_opts = nil)
@@ -104,7 +99,7 @@ class Hypervisor
 
     dbg "#{id} connected"
 
-    c.keepalive = [10, 2]
+    #~ c.keepalive = [10, 2]
 
     @version = c.version
     @libversion = c.libversion
