@@ -51,7 +51,7 @@ module Virt
 
       def dispatch
         #~ puts "Virt::Loop::Timer#dispatch #{@timer_id}"
-        Libvirt::event_invoke_timeout_callback(@timer_id, @opaque)
+        Libvirt::event_invoke_timeout_callback(@timer_id, @opaque) if @interval > 0
       end
     end
 
@@ -118,11 +118,11 @@ module Virt
 
     private
 
-    def next_timeout(timers)
+    def next_timeout()
       # calculate the smallest timeout of all of the registered timeouts
       nexttimer = 0
       @mutex.synchronize {
-          timers.each do |t|
+          @timers.each do |t|
             dbg "timer #{t.timer_id} last #{t.lastfired} interval #{t.interval}"
             next if t.interval < 0
             if nexttimer == 0 || (t.lastfired + t.interval) < nexttimer
@@ -145,19 +145,15 @@ module Virt
       dbg 'run_once'
 
       @running_poll = true
-      
-      timers = nil
-      @mutex.synchronize {
-        timers = @timers
-      }
-      nexttimer = next_timeout(timers)
+
+      nexttimer = next_timeout()
       dbg "Next timeout at #{nexttimer}"
   
       sleep = -1
       if nexttimer > 0
         now = Time.now.to_i * 1000
         if now >= nexttimer
-          sleep = 0
+          sleep = -1
         else
           sleep = (nexttimer - now)
         end
@@ -168,39 +164,40 @@ module Virt
       dbg "@epoll.wait(#{sleep}) ok"
       #~ p events
 
-      events.each do |ev|
-          dbg "ev.events #{ev.events} ev.data: #{ev.data} fd: ev.data.fileno: #{ev.data.fileno}"
-          if ev.data == @rdpipe
-            @mutex.synchronize {
-              @pending_wakeup = false
-              @rdpipe.read(1)
-            }
-            next
-          end
+      @mutex.synchronize {
 
-          handle = nil
-          @mutex.synchronize {
+        events.each do |ev|
+            dbg "ev.events #{ev.events} ev.data: #{ev.data} fd: ev.data.fileno: #{ev.data.fileno}"
+            if ev.data == @rdpipe
+              @mutex.synchronize {
+                @pending_wakeup = false
+                @rdpipe.read(1)
+              }
+              next
+            end
+
             handle = @handles.detect { |h| h.io == ev.data }
-          }
-          if handle.nil?
-            dbg "ERROR: failed to find appropriate handle for triggered IO #{ev.data}"
-            next
-          end
-          dbg "dispatch handle: #{handle}"
-          handle.dispatch(epoll_events_to_libvirt(ev.events))
-      end
+            if handle.nil?
+              dbg "ERROR: failed to find appropriate handle for triggered IO #{ev.data}"
+              next
+            end
+            dbg "dispatch handle: #{handle}"
+            handle.dispatch(epoll_events_to_libvirt(ev.events))
+        end #events.each do |ev|
 
-      dbg 'process timers'
-      now = Time.now.to_i * 1000
-      timers.each do |t|
-        next if t.interval < 0
-        want = t.lastfired + t.interval
-        if now >= (want - 20)
-          t.lastfired = now
-          dbg "dispatch timer: #{t} #{t.timer_id}"
-          t.dispatch
-        end
-      end
+        dbg 'process timers'
+        now = Time.now.to_i * 1000
+        @timers.each do |t|
+          next if t.interval < 0
+          want = t.lastfired + t.interval
+          if now >= (want - 20)
+            t.lastfired = now
+            dbg "dispatch timer: #{t} #{t.timer_id}"
+            t.dispatch
+          end
+        end #@timers.each do |t|
+
+      } #@mutex.synchronize
 
       @running_poll = false
     end

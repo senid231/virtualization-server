@@ -1,9 +1,11 @@
+require 'reentrant_mutex'
+
 class LoggerMutex
   attr_reader :mutex
 
   def initialize(class_name = nil)
     @class_name = class_name
-    @mutex = Mutex.new
+    @mutex = ReentrantMutex.new
   end
 
   def synchronize
