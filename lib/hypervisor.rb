@@ -29,39 +29,46 @@ class Hypervisor
 
   class << self
     def load_storage(config)
-      puts 'Hypervisor.load_storage'
+      dbg 'load_storage'
       self._storage = Hypervisor::Storage.new(config)
     end
 
     def all
-      puts 'Hypervisor.all'
+      dbg 'all'
       return [] if _storage.nil?
       _storage.hypervisors
     end
 
     def find_by(id:)
-      puts "Hypervisor.find id #{id}"
+      dbg "#{id}"
       return if _storage.nil?
       _storage.hypervisors_hash[id]
     end
   end
 
   def initialize(id, name, uri)
+    dbg "#{id} #{name} #{uri}"
+
     @id = id
     @name = name
     @uri = uri
 
-    @thread = Thread.new do
-      connection.domain_event_register_any(
-          Libvirt::Connect::DOMAIN_EVENT_ID_REBOOT,
-          method(:dom_event_callback_reboot).to_proc
-      )
-    end
-    @thread.abort_on_exception = true
+    #force connect to initialize events callbacks
+    connection
+
+  end
+
+  def register_connection_event_callbacks(c)
+    dbg "#{c}"
+    c.domain_event_register_any(
+        Libvirt::Connect::DOMAIN_EVENT_ID_REBOOT,
+        method(:dom_event_callback_reboot).to_proc
+    )
   end
 
   def connection
-    @connection ||= _open_connection
+    dbg "connection #{@connection}"
+    @connection ||= _open_connection(true)
   end
 
   def to_json(_opts = nil)
@@ -78,26 +85,27 @@ class Hypervisor
   private
 
   def dom_event_callback_reboot(conn, dom, opaque)
-    puts "Hypervisor(#{id})#dom_event_callback_reboot: conn #{conn}, dom #{dom}, opaque #{opaque}"
+    dbg "#{id} #{conn}, dom #{dom}, opaque #{opaque}"
   end
 
-  def _open_connection
+  def _open_connection(register_events = false)
     if self.class._storage&.libvirt_rw
-      puts "Hypervisor #{id} Opening RW connection to #{name}"
+      dbg "#{id} Opening RW connection to #{name}"
       c = Libvirt::open(uri)
     else
-      puts "Hypervisor #{id} Opening RO connection to #{name}"
+      dbg "#{id} Opening RO connection to #{name}"
       c = Libvirt::open_read_only(uri)
     end
 
-    puts "Hypervisor #{id} connected"
+    dbg "#{id} connected"
 
-    #c.keepalive=[10,2]
+    #~ c.keepalive = [10, 2]
 
     @version = c.version
     @libversion = c.libversion
     @hostname = c.hostname
     @max_vcpus = c.max_vcpus
+    @capabilities = c.capabilities
 
     node_info = c.node_info
     @cpu_model = node_info.model
@@ -109,9 +117,19 @@ class Hypervisor
     @cpu_threads = node_info.threads
     @total_memory = node_info.memory
     @free_memory = node_info.memory
-    @capabilities = c.capabilities
+
+    register_connection_event_callbacks(c) if register_events
 
     c
   end
 
+  def dbg(msg)
+    meth_name = caller.first.match(/`(.+)'/)[1]
+    AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}##{meth_name} #{msg}" }
+  end
+
+  def self.dbg(msg)
+    meth_name = caller.first.match(/`(.+)'/)[1]
+    AppLogger.debug("0x#{object_id.to_s(16)}") { "#{name}.#{meth_name} #{msg}" }
+  end
 end

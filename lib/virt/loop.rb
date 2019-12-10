@@ -4,6 +4,8 @@
 # 2) it tries to simulate a multi-threaded UI program, leading to some weirdness
 
 require 'libvirt'
+require 'epoll'
+require_relative '../logger_mutex'
 
 module Virt
   class Loop
@@ -13,19 +15,20 @@ module Virt
       # Libvirt::event_invoke_handle_callback (feeding it the handle_id we returned
       # from add_handle, the file descriptor, the new events, and the opaque
       # data that libvirt gave us earlier)
-      attr_accessor :handle_id, :fd, :events
+      attr_accessor :handle_id, :fd, :io, :events
       attr_reader :opaque
 
       def initialize(handle_id, fd, events, opaque)
-        puts "Virt::Loop::Handle.initialize"
+        #~ puts "Virt::Loop::Handle.initialize"
         @handle_id = handle_id
+        @io = IO.new(fd, mode: 'r+', autoclose: false)
         @fd = fd
         @events = events
         @opaque = opaque
       end
 
       def dispatch(events)
-        puts "Virt::Loop::Handle#dispatch events #{events}"
+        #~ puts "Virt::Loop::Handle#dispatch events #{events}"
         Libvirt::event_invoke_handle_callback(@handle_id, @fd, events, @opaque)
       end
     end
@@ -39,7 +42,7 @@ module Virt
       attr_reader :timer_id, :opaque
 
       def initialize(timer_id, interval, opaque)
-        puts "Virt::Loop::Timer.initialize"
+        #~ puts "Virt::Loop::Timer.initialize #{timer_id} #{interval}"
         @timer_id = timer_id
         @interval = interval
         @opaque = opaque
@@ -47,16 +50,31 @@ module Virt
       end
 
       def dispatch
-        puts "Virt::Loop::Timer#dispatch"
-        Libvirt::event_invoke_timeout_callback(@timer_id, @opaque)
+        #~ puts "Virt::Loop::Timer#dispatch #{@timer_id}"
+        Libvirt::event_invoke_timeout_callback(@timer_id, @opaque) if @interval > 0
+      end
+    end
+
+    class EventsIdPair
+      attr_reader :libvirt_id, :epoll_id
+      def initialize(libvirt_id, epoll_id)
+        @libvirt_id = libvirt_id
+        @epoll_id = epoll_id
       end
     end
 
     def initialize
-      puts "Virt::Loop#initialize"
-      @next_handle_id = 1
-      @next_timer_id = 1
+      dbg 'initialize'
+
       @handles = []
+      @next_handle_id = 1
+
+      @timers = []
+      @next_timer_id = 1
+
+      @mutex = LoggerMutex.new(self.class.name)
+      @epoll = Epoll.create
+
       # a bit of oddness having to do with signalling.  Since signals are
       # unreliable in a multi-threaded program, create a "self-pipe".  The read
       # end of the pipe will be part of the pollin array, and will be selected
@@ -73,18 +91,26 @@ module Virt
 
       @timers = []
 
-      @pollin = []
-      @pollout = []
-      @pollerr = []
-      @pollhup = []
+      dbg "register rdpipe with fd #{@rdpipe.fileno} in epoll"
+      @epoll.add(@rdpipe, Epoll::IN | Epoll::ERR | Epoll::HUP)
 
-      @pollin << @rdpipe
+      @libvirt_events_to_epoll_map = []
+      [
+        [Libvirt::EVENT_HANDLE_READABLE, Epoll::IN],
+        [Libvirt::EVENT_HANDLE_WRITABLE, Epoll::OUT],
+        [Libvirt::EVENT_HANDLE_ERROR, Epoll::ERR],
+        [Libvirt::EVENT_HANDLE_HANGUP, Epoll::HUP],
+      ].each { |m| @libvirt_events_to_epoll_map << EventsIdPair.new(*m) }
+      p @libvirt_events_to_epoll_map
+
       register_handlers
     end
 
     def run_loop
+      dbg 'run_loop'
+      #~ Thread.current.name = "Virt::Loop"
+      #~ Thread.current.abort_on_exception = true
       # run "run_once" forever
-      puts "Virt::Loop#run_loop"
       while true
         run_once
       end
@@ -92,31 +118,19 @@ module Virt
 
     private
 
-    def next_timeout
+    def next_timeout()
       # calculate the smallest timeout of all of the registered timeouts
       nexttimer = 0
-      @timers.each do |t|
-        puts "Virt::Loop#next_timeout, timer #{t.timer_id} last #{t.lastfired} interval #{t.interval}"
-        next if t.interval < 0
-        if nexttimer == 0 || (t.lastfired + t.interval) < nexttimer
-          nexttimer = t.lastfired + t.interval
-        end
-      end
-
+      @mutex.synchronize {
+          @timers.each do |t|
+            dbg "timer #{t.timer_id} last #{t.lastfired} interval #{t.interval}"
+            next if t.interval < 0
+            if nexttimer == 0 || (t.lastfired + t.interval) < nexttimer
+              nexttimer = t.lastfired + t.interval
+            end
+          end
+      }
       nexttimer
-    end
-
-    def print_pollers
-      # debug function to print the polling arrays
-      print "pollin: ["
-      @pollin.each { |x| print "#{x.fileno}, " }
-      puts "]"
-      print "pollout: ["
-      @pollin.each { |x| print "#{x.fileno}, " }
-      puts "]"
-      print "pollerr: ["
-      @pollin.each { |x| print "#{x.fileno}, " }
-      puts "]"
     end
 
     def run_once
@@ -128,69 +142,62 @@ module Virt
       # timeout.  If one of the file descriptors becomes active, we properly
       # dispatch the handle event to libvirt.  If we woke up because of a timeout
       # we dispatch the timeout callback to libvirt.
-      puts "Virt::Loop#run_once"
+      dbg 'run_once'
 
-      sleep = -1
       @running_poll = true
-      nexttimer = next_timeout
-      puts "Virt::Loop Next timeout at #{nexttimer}"
 
+      nexttimer = next_timeout()
+      dbg "Next timeout at #{nexttimer}"
+  
+      sleep = -1
       if nexttimer > 0
         now = Time.now.to_i * 1000
         if now >= nexttimer
-          sleep = 0
+          sleep = -1
         else
-          sleep = (nexttimer - now) / 1000.0
+          sleep = (nexttimer - now)
         end
       end
 
-      if sleep < 0
-        puts "Virt::Loop IO.select"
-        events = IO.select(@pollin, @pollout, @pollerr)
-      else
-        puts "Virt::Loop IO.select sleep #{sleep}"
-        events = IO.select(@pollin, @pollout, @pollerr, sleep)
-      end
+      events = @epoll.wait(sleep)
 
-      puts "Virt::Loop IO.select ok"
+      dbg "@epoll.wait(#{sleep}) ok"
+      #~ p events
 
-      print_pollers
+      @mutex.synchronize {
 
-      unless events.nil?
-        puts "Virt::Loop after poll, 0 #{events[0]}, 1 #{events[1]}, 2 #{events[2]}"
-        (events[0] + events[1] + events[2]).each do |io|
-          if io.fileno == @rdpipe.fileno
-            @pending_wakeup = false
-            @rdpipe.read(1)
-            next
-          end
-
-          @handles.each do |handle|
-            if handle.fd == io.fileno
-              libvirt_events = 0
-              if events[0].include?(io)
-                libvirt_events |= Libvirt::EVENT_HANDLE_READABLE
-              elsif events[1].include?(io)
-                libvirt_events |= Libvirt::EVENT_HANDLE_WRITABLE
-              elsif events[2].include?(io)
-                libvirt_events |= Libvirt::EVENT_HANDLE_ERROR
-              end
-              handle.dispatch(libvirt_events)
+        events.each do |ev|
+            dbg "ev.events #{ev.events} ev.data: #{ev.data} fd: ev.data.fileno: #{ev.data.fileno}"
+            if ev.data == @rdpipe
+              @mutex.synchronize {
+                @pending_wakeup = false
+                @rdpipe.read(1)
+              }
+              next
             end
+
+            handle = @handles.detect { |h| h.io == ev.data }
+            if handle.nil?
+              dbg "ERROR: failed to find appropriate handle for triggered IO #{ev.data}"
+              next
+            end
+            dbg "dispatch handle: #{handle}"
+            handle.dispatch(epoll_events_to_libvirt(ev.events))
+        end #events.each do |ev|
+
+        dbg 'process timers'
+        now = Time.now.to_i * 1000
+        @timers.each do |t|
+          next if t.interval < 0
+          want = t.lastfired + t.interval
+          if now >= (want - 20)
+            t.lastfired = now
+            dbg "dispatch timer: #{t} #{t.timer_id}"
+            t.dispatch
           end
-        end
-      end
+        end #@timers.each do |t|
 
-      now = Time.now.to_i * 1000
-      @timers.each do |t|
-        next if t.interval < 0
-
-        want = t.lastfired + t.interval
-        if now >= (want - 20)
-          t.lastfired = now
-          t.dispatch
-        end
-      end
+      } #@mutex.synchronize
 
       @running_poll = false
     end
@@ -198,40 +205,54 @@ module Virt
     def interrupt
       # write a byte to the internal pipe to wake up "run_once" for recalculation.
       # See initialize for more information about the internal pipe
-      puts "Virt::Loop#interrupt"
+      dbg '> interrupt'
       if @running_poll && !@pending_wakeup
         @pending_wakeup = true
         @wrpipe.write('c')
       end
     end
 
-    def register_fd(fd, events)
-      # given an fd and a set of libvirt events, register the fd in the
-      # appropriate polling arrays.  These arrays are used in "run_once" to
-      # determine what to poll on
-      puts "Virt::Loop#register_fd fd #{fd} events #{events}"
-      if (events & Libvirt::EVENT_HANDLE_READABLE) != 0
-        @pollin << IO.new(fd, 'r')
+    def libvirt_events_to_epoll(events)
+      ret = 0
+      @libvirt_events_to_epoll_map.each do |i|
+        ret |= i.epoll_id if (events & i.libvirt_id) != 0
       end
-      if (events & Libvirt::EVENT_HANDLE_WRITABLE) != 0
-        @pollout << IO.new(fd, 'w')
+      dbg "#{events} -> #{ret}"
+      ret
+    end
+    
+    
+    def epoll_events_to_libvirt(events)
+      ret = 0
+      @libvirt_events_to_epoll_map.each do |i|
+        ret |= i.libvirt_id if (events & i.epoll_id) != 0
       end
-      if (events & Libvirt::EVENT_HANDLE_ERROR) != 0
-        @pollerr << IO.new(fd, 'r')
-      end
-      if (events & Libvirt::EVENT_HANDLE_HANGUP) != 0
-        @pollhup << IO.new(fd, 'r')
+      dbg "#{events} -> #{ret}"
+      ret
+    end
+
+    def add_io(io, events)
+      dbg "#{io.fileno} #{events}"
+      @epoll.add(io, libvirt_events_to_epoll(events))
+    end
+
+    def mod_io(io, events)
+      dbg "#{io.fileno} events #{events}"
+      if events != 0
+        begin
+            @epoll.mod(io, libvirt_events_to_epoll(events))
+        rescue
+            #for cases when io was removed from epoll because of zero events
+            @epoll.add(io, libvirt_events_to_epoll(events))
+        end
+      else
+        @epoll.del(io)
       end
     end
 
-    def unregister_fd(fd)
-      # remove an fd from all of the poll arrays.  run_once will no longer select
-      # on this fd
-      puts "Virt::Loop#unregister_fd fd #{fd}"
-      @pollin.delete_if { |x| x.fileno == fd }
-      @pollout.delete_if { |x| x.fileno == fd }
-      @pollerr.delete_if { |x| x.fileno == fd }
-      @pollhup.delete_if { |x| x.fileno == fd }
+    def del_io(io)
+      dbg "io:#{io.fileno}"
+      @epoll.del(io)
     end
 
     def add_handle(fd, events, opaque)
@@ -243,12 +264,16 @@ module Virt
       # dispatching an event.  The application *must* also store the opaque
       # data given by libvirt, and return it back to libvirt later
       # (see remove_handle)
-      puts "Virt::Loop#add_handle fd #{fd}"
-      handle_id = @next_handle_id + 1
-      @next_handle_id = handle_id
-      @handles << Virt::Loop::Handle.new(handle_id, fd, events, opaque)
-      register_fd(fd, events)
-      interrupt
+      dbg "> fd:#{fd}"
+      handle_id = nil
+      @mutex.synchronize {
+        handle_id = @next_handle_id + 1
+        @next_handle_id = handle_id
+        handle = Virt::Loop::Handle.new(handle_id, fd, events, opaque)
+        @handles << handle
+        add_io(handle.io, handle.events)
+        interrupt
+      }
       handle_id
     end
 
@@ -257,14 +282,14 @@ module Virt
       # (which was returned to libvirt via add_handle), and the new events.  It
       # is our responsibility to find the correct handle and update the events
       # it cares about
-      puts "Virt::Loop#update_handle handle_id #{handle_id}, events #{events}"
-
-      handle = @handles.detect { |h| h.handle_id == handle_id }
-      handle.events = events
-      puts "Virt::Loop updating handle_id #{handle_id} with fd #{handle.fd}"
-      unregister_fd(handle.fd)
-      register_fd(handle.fd, events)
-      interrupt
+      dbg "> handle_id:#{handle_id}, events:#{events}"
+      #~ p *caller
+      @mutex.synchronize {
+        handle = @handles.detect { |h| h.handle_id == handle_id }
+        dbg "handle_id #{handle_id} with fd #{handle.fd} #{handle.events}-> #{events}"
+        handle.events = events
+        mod_io(handle.io, handle.events)
+      }
       nil
     end
 
@@ -273,12 +298,18 @@ module Virt
       # (which was returned to libvirt via add_handle), and it is our
       # responsibility to "forget" the handle.  We must return the opaque data
       # that libvirt handed us in "add_handle", otherwise we will leak memory
-      puts "Virt::Loop#remove_handle handle_id #{handle_id}"
-      idx = @handlers.index { |h| h.handle_id == handle_id }
-      handle = @handlers.delete_at(idx)
-      puts "Virt::Loop Remove handle_id #{handle.handle_id} fd #{handle.fd}"
-      interrupt
-      handle.opaque
+      dbg "> handle_id:#{handle_id}"
+      opaque = nil
+      @mutex.synchronize {
+        idx = @handles.index { |h| h.handle_id == handle_id }
+        unless idx.nil?
+          handle = @handles.delete_at(idx)
+          dbg "handle_id #{handle_id} idx #{idx} fd #{handle.fd}"
+          opaque = handle.opaque
+          del_io(handle.io)
+        end
+      }
+      opaque
     end
 
     def add_timer(interval, opaque)
@@ -290,11 +321,14 @@ module Virt
       # dispatching an event.  The application *must* also store the opaque
       # data given by libvirt, and return it back to libvirt later
       # (see remove_timer)
-      puts "Virt::Loop.add_timer interval #{interval}"
-      timer_id = @next_timer_id + 1
-      @next_timer_id = timer_id
-      @timers << Virt::Loop::Timer.new(timer_id, interval, opaque)
-      interrupt
+      dbg "> interval #{interval}"
+      timer_id = nil
+      @mutex.synchronize {
+        timer_id = @next_timer_id + 1
+        @next_timer_id = timer_id
+        @timers << Virt::Loop::Timer.new(timer_id, interval, opaque)
+        interrupt
+      }
       timer_id
     end
 
@@ -303,11 +337,17 @@ module Virt
       # (which was returned to libvirt via add_timer), and the new interval.  It
       # is our responsibility to find the correct timer and update the timers
       # it cares about
-      puts "Virt::Loop#update_timer timer_id #{timer_id} interval #{interval}"
-      timer = @timers.detect { |t| t.timer_id == timer_id }
-      puts "Virt::Loop updating timer #{timer.timer_id}"
-      timer.interval = interval
-      interrupt
+      dbg "> timer_id:#{timer_id}"
+      #~ p *caller
+
+      @mutex.synchronize {
+        timer = @timers.detect { |t| t.timer_id == timer_id }
+        if timer and timer.interval!=interval
+          dbg "updating timer #{timer.timer_id} #{timer.interval} -> #{interval}"
+          timer.interval = interval
+          interrupt
+        end
+      }
       nil
     end
 
@@ -316,16 +356,22 @@ module Virt
       # (which was returned to libvirt via add_timer), and it is our
       # responsibility to "forget" the timer.  We must return the opaque data
       # that libvirt handed us in "add_timer", otherwise we will leak memory
-      puts "Virt::Loop#remove_timer"
-
-      idx = @timers.index { |t| t.timer_id == timer_id }
-      timer = @timers.delete_at(idx)
-      puts "Virt::Loop Remove timer #{timer.timer_id}"
-      interrupt
-      timer.opaque
+      dbg "> timer_id:#{timer_id}"
+      opaque = nil
+      @mutex.synchronize {
+        idx = @timers.index { |t| t.timer_id == timer_id }
+        unless idx.nil?
+          dbg "Remove timer #{timer.timer_id}"
+          timer = @timers.delete_at(idx)
+          opaque = timer.opaque
+          interrupt
+        end
+      }
+      opaque
     end
 
     def register_handlers
+      dbg 'register_handlers'
       Libvirt::event_register_impl(
           method(:add_handle).to_proc,
           method(:update_handle).to_proc,
@@ -334,6 +380,13 @@ module Virt
           method(:update_timer).to_proc,
           method(:remove_timer).to_proc
       )
+    end
+
+    private
+
+    def dbg(msg)
+      meth_name = caller.first.match(/`(.+)'/)[1]
+      AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}::#{meth_name} #{msg}" }
     end
   end
 end
