@@ -121,7 +121,10 @@ module Virt
     def register_timer(timer)
       dbg { "#{self.class}#register_timer timer_id=#{timer.timer_id}" }
 
-      return if timer.wait_time.nil?
+      if timer.wait_time.nil?
+        dbg { "#{self.class}#register_timer no wait time timer_id=#{timer.timer_id}, interval=#{timer.interval}" }
+        return
+      end
 
       timer_task = Async do |_task|
         dbg { "#{self.class}#register_timer Async start timer_id=#{timer.timer_id}" }
@@ -146,7 +149,7 @@ module Virt
 
     # @param [Virt::AsyncLoop::Handle]
     def register_handle(handle)
-      dbg { "#{self.class}#register_handle handle_id=#{handle.handle_id}" }
+      dbg { "#{self.class}#register_handle handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
 
       if (handle.events & Libvirt::EVENT_HANDLE_ERROR) != 0
         dbg { "#{self.class}#register_handle skip EVENT_HANDLE_ERROR handle_id=#{handle.handle_id}" }
@@ -156,18 +159,28 @@ module Virt
       end
 
       interest = events_to_interest(handle.events)
-      io_mode = interest_to_io_mode(interest)
-      dbg { "#{self.class}#register_handle parse handle_id=#{handle.handle_id} events=#{handle.events} interest=#{interest} io_mode=#{io_mode}" }
-      io = IO.new(handle.fd, io_mode)
+      dbg { "#{self.class}#register_handle parse handle_id=#{handle.handle_id}, fd=#{handle.fd}, events=#{handle.events}, interest=#{interest}" }
+
+      if interest.nil?
+        dbg { "#{self.class}#register_handle no interest handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+        return
+      end
 
       Async do |task|
-        dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+        io_mode = interest_to_io_mode(interest)
+        dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}, fd=#{handle.fd}, io_mode=#{io_mode}" }
+        io = IO.new(handle.fd, io_mode)
         monitor = @reactor.register(io, interest)
-        @handle_tasks[handle.handle_id] = [monitor, task]
+        @handle_tasks[handle.handle_id] = monitor
         task.yield
         events = readiness_to_events(monitor.readiness)
-        dbg { "#{self.class}#register_handle Async resume #{monitor.readiness} handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
-        handle.dispatch(events)
+        dbg { "#{self.class}#register_handle Async resume readiness=#{monitor.readiness}, handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+
+        if events.nil?
+          dbg { "#{self.class}#register_handle Async not ready readiness=#{monitor.readiness}, handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+        else
+          handle.dispatch(events)
+        end
       end
     end
 
@@ -180,13 +193,12 @@ module Virt
       when :w
         'w'
       else
-        # raise ArgumentError, "invalid interest #{interest}"
-        'a+'
+        nil
       end
     end
 
     def readiness_to_events(readiness)
-      case readiness
+      case readiness.to_sym
       when :rw
         Libvirt::EVENT_HANDLE_READABLE | Libvirt::EVENT_HANDLE_WRITABLE
       when :r
@@ -194,8 +206,7 @@ module Virt
       when :w
         Libvirt::EVENT_HANDLE_WRITABLE
       else
-        Libvirt::EVENT_HANDLE_READABLE | Libvirt::EVENT_HANDLE_WRITABLE
-        # raise ArgumentError, "invalid readiness #{readiness}"
+        nil
       end
     end
 
@@ -203,26 +214,23 @@ module Virt
       readable = (events & Libvirt::EVENT_HANDLE_READABLE) != 0
       writable = (events & Libvirt::EVENT_HANDLE_WRITABLE) != 0
       if readable && writable
-        interest = :rw
+        :rw
       elsif readable
-        interest = :r
+        :r
       elsif writable
-        interest = :w
+        :w
       else
-        # raise ArgumentError, "invalid events #{events}"
-        interest = :rw
+        nil
       end
-
-      interest
     end
 
     # @param [Virt::AsyncLoop::Handle]
     def unregister_handle(handle)
-      dbg { "#{self.class}#unregister_handle handle_id=#{handle.handle_id}" }
+      dbg { "#{self.class}#unregister_handle handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
 
-      monitor, _ = @handle_tasks.delete(handle.handle_id)
+      monitor = @handle_tasks.delete(handle.handle_id)
       if monitor.nil?
-        dbg { "#{self.class}#unregister_handle WARNING already unregistered handle_id=#{handle.handle_id}" }
+        dbg { "#{self.class}#unregister_handle already unregistered handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
         return
       end
       monitor.close unless monitor.closed?
