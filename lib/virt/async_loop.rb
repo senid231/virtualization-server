@@ -91,6 +91,8 @@ module Virt
       dbg { "#{self.class}#run_loop" }
 
       register_handlers
+
+      run_debug_log_print(1)
     end
 
     private
@@ -99,12 +101,12 @@ module Virt
       Async do
         while true
           dbg do
-            "#{self.class}#debug_log_objects\n"
-            "> next_handle_id=#{@next_handle_id}\n"
-            "> next_timer_id=#{@next_timer_id}\n"
-            "> timers(#{@timers.size})=#{@timers.map(&:timer_id).join(', ')}\n"
-            "> handles(#{@handles.size})=#{@handles.map(&:handle_id).join(', ')}\n"
-            "> timer_tasks(#{@timer_tasks.keys.size})=#{@timer_tasks.keys.join(', ')}\n"
+            "#{self.class}#debug_log_objects\n" +
+            "> next_handle_id=#{@next_handle_id}\n" +
+            "> next_timer_id=#{@next_timer_id}\n" +
+            "> timers(#{@timers.size})=#{@timers.map(&:timer_id).join(', ')}\n" +
+            "> handles(#{@handles.size})=#{@handles.map(&:handle_id).join(', ')}\n" +
+            "> timer_tasks(#{@timer_tasks.keys.size})=#{@timer_tasks.keys.join(', ')}\n" +
             "> handle_tasks(#{@handle_tasks.keys.size})=#{@handle_tasks.keys.join(', ')}"
           end
 

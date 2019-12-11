@@ -24,6 +24,7 @@ GEM
       async (~> 1.14)
     backports (3.15.0)
     build-environment (1.12.1)
+    byebug (11.0.1)
     coderay (1.1.2)
     concurrent-ruby (1.1.5)
     console (1.6.0)
@@ -117,6 +118,7 @@ PLATFORMS
 DEPENDENCIES
   activesupport
   async
+  byebug
   dotenv
   epoll
   falcon
@@ -129,7 +131,7 @@ DEPENDENCIES
   sinja
 
 RUBY VERSION
-   ruby 2.5.5p157
+   ruby 2.6.0p0
 
 BUNDLED WITH
    2.0.2
