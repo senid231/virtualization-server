@@ -14,7 +14,7 @@ module Virt
       attr_reader :opaque
 
       def initialize(handle_id, fd, events, opaque)
-        Virt::AsyncLoop.dbg { "#{self.class}#initialize handle_id=#{handle_id}, fd=#{fd}, events=#{events}" }
+        AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}#initialize handle_id=#{handle_id}, fd=#{fd}, events=#{events}" }
 
         @handle_id = handle_id
         @fd = fd
@@ -23,7 +23,7 @@ module Virt
       end
 
       def dispatch(events)
-        Virt::AsyncLoop.dbg { "#{self.class}#dispatch events handle_id=#{@handle_id} events=#{events}" }
+        AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}#dispatch events handle_id=#{@handle_id} events=#{events}" }
 
         Libvirt::event_invoke_handle_callback(@handle_id, @fd, events, @opaque)
       end
@@ -38,7 +38,7 @@ module Virt
       attr_reader :timer_id, :opaque
 
       def initialize(timer_id, interval, opaque)
-        AppLogger.debug(self) { "#{self.class}#initialize timer_id=#{timer_id}, interval=#{interval}" }
+        AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}#initialize timer_id=#{timer_id}, interval=#{interval}" }
 
         @timer_id = timer_id
         @interval = interval.to_f / 1000.to_f
@@ -52,7 +52,7 @@ module Virt
       end
 
       def dispatch
-        AppLogger.debug(self) { "#{self.class}#dispatch timer_id=#{@timer_id}" }
+        AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}#dispatch timer_id=#{@timer_id}" }
 
         Libvirt::event_invoke_timeout_callback(@timer_id, @opaque)
       end
@@ -123,11 +123,11 @@ module Virt
 
       return if timer.wait_time.nil?
 
-      timer_task = Async do |task|
+      timer_task = Async do |_task|
         dbg { "#{self.class}#register_timer Async start timer_id=#{timer.timer_id}" }
         now_time = Time.now.to_f
         timeout = timer.wait_time > now_time ? timer.wait_time - now_time : 0
-        task.sleep(timeout)
+        @reactor.sleep(timeout)
         dbg { "#{self.class}#register_timer Async start timer_id=#{timer.timer_id}" }
         timer.last_fired = Time.now.to_f
         timer.dispatch
@@ -141,7 +141,7 @@ module Virt
       dbg { "#{self.class}#unregister_timer timer_id=#{timer.timer_id}" }
 
       timer_task = @timer_tasks.delete(timer.timer_id)
-      timer_task.stop
+      timer_task.stop if timer_task.alive?
     end
 
     # @param [Virt::AsyncLoop::Handle]
@@ -157,18 +157,18 @@ module Virt
 
       interest = events_to_interest(handle.events)
       io_mode = interest_to_io_mode(interest)
-      dbg { "#{self.class}#register_handle parse events=#{handle.events} interest=#{interest} io_mode=#{io_mode}" }
+      dbg { "#{self.class}#register_handle parse handle_id=#{handle.handle_id} events=#{handle.events} interest=#{interest} io_mode=#{io_mode}" }
+      io = IO.new(handle.fd, io_mode)
 
-      handle_task = Async do |task|
-        dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}" }
-        io = IO.new(handle.fd, io_mode)
-        monitor = @reactor.register(io, interest, self)
+      Async do |task|
+        dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+        monitor = @reactor.register(io, interest)
+        @handle_tasks[handle.handle_id] = [monitor, task]
         task.yield
         events = readiness_to_events(monitor.readiness)
-        dbg { "#{self.class}#register_handle Async resume #{monitor.readiness} handle_id=#{handle.handle_id}" }
+        dbg { "#{self.class}#register_handle Async resume #{monitor.readiness} handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
         handle.dispatch(events)
       end
-      @handle_tasks[handle.handle_id] = handle_task
     end
 
     def interest_to_io_mode(interest)
@@ -220,8 +220,12 @@ module Virt
     def unregister_handle(handle)
       dbg { "#{self.class}#unregister_handle handle_id=#{handle.handle_id}" }
 
-      read_task = @handle_tasks.delete(handle.handle_id)
-      read_task.stop
+      monitor, _ = @handle_tasks.delete(handle.handle_id)
+      if monitor.nil?
+        dbg { "#{self.class}#unregister_handle WARNING already unregistered handle_id=#{handle.handle_id}" }
+        return
+      end
+      monitor.close unless monitor.closed?
     end
 
     def add_handle(fd, events, opaque)
@@ -266,8 +270,8 @@ module Virt
       # that libvirt handed us in "add_handle", otherwise we will leak memory
       dbg { "#{self.class}#remove_handle #{handle_id}" }
 
-      idx = @handlers.index { |h| h.handle_id == handle_id }
-      handle = @handlers.delete_at(idx)
+      idx = @handles.index { |h| h.handle_id == handle_id }
+      handle = @handles.delete_at(idx)
       dbg { "#{self.class}#remove_handle removing handle_id=#{handle.handle_id} fd=#{handle.fd}" }
       unregister_handle(handle)
       handle.opaque
