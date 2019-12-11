@@ -63,6 +63,17 @@ module Virt
       end
     end
 
+    # @return [Thread] thread where virt loop works
+    def self.run
+      thread = Thread.new do
+        loop = new
+        loop.run_loop
+      end
+      thread.abort_on_exception = true
+      thread.name = "Virt::Loop"
+      thread
+    end
+
     def initialize
       dbg 'initialize'
 

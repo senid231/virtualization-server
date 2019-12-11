@@ -1,3 +1,5 @@
 #!/bin/sh
 
-bundle exec rackup -p 4567
+export RACK_ENV=development
+
+bundle exec rackup --server falcon -p 4567

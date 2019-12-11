@@ -1,7 +1,6 @@
 require 'yaml'
 require 'lib/app_logger'
 require 'lib/hypervisor'
-require 'lib/virt/runner'
 
 AppLogger.setup_logger(STDOUT, level: Logger::Severity::DEBUG)
 AppLogger.info { Libvirt::version() }

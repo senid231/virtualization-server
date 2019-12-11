@@ -9,7 +9,7 @@ class AppLogger
 
   class AppFormatter
     LOG_FORMAT = "%s, %s [%d/%s/%s] %s\n".freeze
-    DEFAULT_DATETIME_FORMAT = "%H:%M:%S".freeze
+    DEFAULT_DATETIME_FORMAT = "%F %T.%N".freeze
 
     attr_accessor :datetime_format
 
@@ -22,7 +22,7 @@ class AppLogger
           severity[0..0],
           format_datetime(time),
           Process.pid,
-          "0x#{Thread.current.object_id.to_s(16)}",
+          "0x#{Async::Task.current.object_id.to_s(16)}",
           progname,
           format_message(message)
       ]
