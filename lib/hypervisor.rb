@@ -29,25 +29,36 @@ class Hypervisor
 
   class << self
     def load_storage(config)
-      dbg 'load_storage'
+      dbg { "#{self.class}.load_storage" }
       self._storage = Hypervisor::Storage.new(config)
+      dbg { "#{self.class}.load_storage loaded" }
     end
 
     def all
-      dbg 'all'
-      return [] if _storage.nil?
-      _storage.hypervisors
+      dbg { "#{self.class}.all" }
+      if _storage.nil?
+        dbg { "#{self.class}.all storage not initialized" }
+        return []
+      end
+      result = _storage.hypervisors
+      dbg { "#{self.class}.all found size=#{result.size}" }
+      result
     end
 
     def find_by(id:)
-      dbg "#{id}"
-      return if _storage.nil?
-      _storage.hypervisors_hash[id]
+      dbg { "#{self.class}.find_by id=#{id}" }
+      if _storage.nil?
+        dbg { "#{self.class}.find_by storage not initialized id=#{id}" }
+        return
+      end
+      result = _storage.hypervisors_hash[id]
+      dbg { "#{self.class}.find_by found id=#{result&.id}, name=#{result&.name}, uri=#{result&.uri}" }
+      result
     end
   end
 
   def initialize(id, name, uri)
-    dbg "#{id} #{name} #{uri}"
+    dbg { "#{self.class}#initialize id=#{id}, name=#{name}, uri=#{uri}" }
 
     @id = id
     @name = name
@@ -55,19 +66,19 @@ class Hypervisor
 
     #force connect to initialize events callbacks
     connection
-
   end
 
   def register_connection_event_callbacks(c)
-    dbg "#{c}"
+    dbg { "#{self.class}#register_connection_event_callbacks id=#{id}, name=#{name}, uri=#{uri}" }
     c.domain_event_register_any(
         Libvirt::Connect::DOMAIN_EVENT_ID_REBOOT,
         method(:dom_event_callback_reboot).to_proc
     )
+    dbg { "#{self.class}#register_connection_event_callbacks finished id=#{id}, name=#{name}, uri=#{uri}" }
   end
 
   def connection
-    dbg "connection #{@connection}"
+    dbg { "#{self.class}#connection #{@connection.nil? ? 'absent' : 'present'} id=#{@connection}, name=#{name}, uri=#{uri}" }
     @connection ||= _open_connection(true)
   end
 
@@ -85,19 +96,19 @@ class Hypervisor
   private
 
   def dom_event_callback_reboot(conn, dom, opaque)
-    dbg "#{id} #{conn}, dom #{dom}, opaque #{opaque}"
+    dbg { "#{self.class}#dom_event_callback_reboot id=#{id} conn=#{conn}, dom=#{dom}, opaque=#{opaque}" }
   end
 
   def _open_connection(register_events = false)
     if self.class._storage&.libvirt_rw
-      dbg "#{id} Opening RW connection to #{name}"
+      dbg { "#{self.class}#_open_connection Opening RW connection to name=#{name} id=#{id}, uri=#{uri}" }
       c = Libvirt::open(uri)
     else
-      dbg "#{id} Opening RO connection to #{name}"
+      dbg { "#{self.class}#_open_connection Opening RO connection to name=#{name} id=#{id}, uri=#{uri}" }
       c = Libvirt::open_read_only(uri)
     end
 
-    dbg "#{id} connected"
+    dbg { "#{self.class}#_open_connection Connected name=#{name} id=#{id}, uri=#{uri}" }
 
     #~ c.keepalive = [10, 2]
 
@@ -123,13 +134,5 @@ class Hypervisor
     c
   end
 
-  def dbg(msg)
-    meth_name = caller.first.match(/`(.+)'/)[1]
-    AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}##{meth_name} #{msg}" }
-  end
-
-  def self.dbg(msg)
-    meth_name = caller.first.match(/`(.+)'/)[1]
-    AppLogger.debug("0x#{object_id.to_s(16)}") { "#{name}.#{meth_name} #{msg}" }
-  end
+  include AppLogger::WithDbg
 end

@@ -7,6 +7,22 @@ class AppLogger
   extend Forwardable
   extend SingleForwardable
 
+  module WithDbg
+    extend ActiveSupport::Concern
+
+    class_methods do
+      def dbg(progname = nil, &block)
+        AppLogger.debug(progname || "0x#{object_id.to_s(16)}", &block)
+      end
+    end
+
+    private
+
+    def dbg(progname = nil, &block)
+      AppLogger.debug(progname || "0x#{object_id.to_s(16)}", &block)
+    end
+  end
+
   class AppFormatter
     LOG_FORMAT = "%s, %s [%d/%s/%s] %s\n".freeze
     DEFAULT_DATETIME_FORMAT = "%F %T.%N".freeze

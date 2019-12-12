@@ -14,7 +14,7 @@ module Virt
       attr_reader :opaque
 
       def initialize(handle_id, fd, events, opaque)
-        AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}#initialize handle_id=#{handle_id}, fd=#{fd}, events=#{events}" }
+        dbg { "#{self.class}#initialize handle_id=#{handle_id}, fd=#{fd}, events=#{events}" }
 
         @handle_id = handle_id
         @fd = fd
@@ -34,12 +34,7 @@ module Virt
         dbg { "#{self.class}#dispatch creates fiber fiber=0x#{task.fiber.object_id.to_s(16)} handle_id=#{@handle_id}, events=#{events}, fd=#{@fd}" }
       end
 
-      private
-
-      def dbg(msg = nil, &block)
-        block = proc { msg } unless block_given?
-        AppLogger.debug("0x#{object_id.to_s(16)}", &block)
-      end
+      include AppLogger::WithDbg
     end
 
     class Timer
@@ -51,7 +46,7 @@ module Virt
       attr_reader :timer_id, :opaque
 
       def initialize(timer_id, interval, opaque)
-        AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}#initialize timer_id=#{timer_id}, interval=#{interval}" }
+        dbg { "#{self.class}#initialize timer_id=#{timer_id}, interval=#{interval}" }
 
         @timer_id = timer_id
         @interval = interval.to_f / 1000.to_f
@@ -76,12 +71,7 @@ module Virt
         dbg { "#{self.class}#dispatch creates fiber fiber=0x#{task.fiber.object_id.to_s(16)} timer_id=#{@timer_id}, interval=#{@interval}" }
       end
 
-      private
-
-      def dbg(msg = nil, &block)
-        block = proc { msg } unless block_given?
-        AppLogger.debug("0x#{object_id.to_s(16)}", &block)
-      end
+      include AppLogger::WithDbg
     end
 
     def self.run
@@ -414,15 +404,6 @@ module Virt
       )
     end
 
-    def dbg(msg = nil, &block)
-      block = proc { msg } unless block_given?
-      AppLogger.debug("0x#{object_id.to_s(16)}", &block)
-    end
-
-    def self.dbg(msg = nil, &block)
-      block = proc { msg } unless block_given?
-      AppLogger.debug("0x#{object_id.to_s(16)}", &block)
-    end
-
+    include AppLogger::WithDbg
   end
 end
