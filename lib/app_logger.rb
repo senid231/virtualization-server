@@ -22,7 +22,7 @@ class AppLogger
           severity[0..0],
           format_datetime(time),
           Process.pid,
-          "0x#{Async::Task.current.object_id.to_s(16)}",
+          "0x#{Fiber.current.object_id.to_s(16)}",
           progname,
           format_message(message)
       ]

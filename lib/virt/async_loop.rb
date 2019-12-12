@@ -23,9 +23,22 @@ module Virt
       end
 
       def dispatch(events)
-        AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}#dispatch events handle_id=#{@handle_id} events=#{events}" }
+        dbg { "#{self.class}#dispatch handle_id=#{@handle_id}, events=#{events}, fd=#{@fd}" }
 
-        Libvirt::event_invoke_handle_callback(@handle_id, @fd, events, @opaque)
+        task = Async do |_task|
+          dbg { "#{self.class}#dispatch Async start handle_id=#{@handle_id} events=#{events}, fd=#{@fd}" }
+          Libvirt::event_invoke_handle_callback(@handle_id, @fd, events, @opaque)
+          dbg { "#{self.class}#dispatch Async complete handle_id=#{@handle_id} events=#{events}, fd=#{@fd}" }
+        end
+
+        dbg { "#{self.class}#dispatch creates fiber fiber=0x#{task.fiber.object_id.to_s(16)} handle_id=#{@handle_id}, events=#{events}, fd=#{@fd}" }
+      end
+
+      private
+
+      def dbg(msg = nil, &block)
+        block = proc { msg } unless block_given?
+        AppLogger.debug("0x#{object_id.to_s(16)}", &block)
       end
     end
 
@@ -52,9 +65,22 @@ module Virt
       end
 
       def dispatch
-        AppLogger.debug("0x#{object_id.to_s(16)}") { "#{self.class}#dispatch timer_id=#{@timer_id}" }
+        dbg { "#{self.class}#dispatch timer_id=#{@timer_id}, interval=#{@interval}" }
 
-        Libvirt::event_invoke_timeout_callback(@timer_id, @opaque)
+        task = Async do |_task|
+          dbg { "#{self.class}#dispatch Async start timer_id=#{@timer_id}, interval=#{@interval}" }
+          Libvirt::event_invoke_timeout_callback(@timer_id, @opaque)
+          dbg { "#{self.class}#dispatch Async complete timer_id=#{@timer_id}, interval=#{@interval}" }
+        end
+
+        dbg { "#{self.class}#dispatch creates fiber fiber=0x#{task.fiber.object_id.to_s(16)} timer_id=#{@timer_id}, interval=#{@interval}" }
+      end
+
+      private
+
+      def dbg(msg = nil, &block)
+        block = proc { msg } unless block_given?
+        AppLogger.debug("0x#{object_id.to_s(16)}", &block)
       end
     end
 
@@ -166,21 +192,62 @@ module Virt
         return
       end
 
-      Async do |task|
+      task = Async do |_task|
         io_mode = interest_to_io_mode(interest)
         dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}, fd=#{handle.fd}, io_mode=#{io_mode}" }
         io = IO.new(handle.fd, io_mode)
-        monitor = @reactor.register(io, interest)
+        # monitor = @reactor.register(io, interest)
+        # @handle_tasks[handle.handle_id] = monitor
+        monitor = Async::Wrapper.new(io)
         @handle_tasks[handle.handle_id] = monitor
-        task.yield
-        events = readiness_to_events(monitor.readiness)
-        dbg { "#{self.class}#register_handle Async resume readiness=#{monitor.readiness}, handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
 
-        if events.nil?
-          dbg { "#{self.class}#register_handle Async not ready readiness=#{monitor.readiness}, handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
-        else
-          handle.dispatch(events)
+        readiness = nil
+
+        while readiness == nil
+          readiness, cancelled = waiting_io(monitor, interest)
+
+          if cancelled
+            dbg { "#{self.class}#register_handle Async cancelled handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+            break
+          end
+
+          dbg { "#{self.class}#register_handle Async resume readiness=#{readiness}, handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+          events = readiness_to_events(readiness)
+
+          unless events.nil?
+            handle.dispatch(events)
+            break
+          end
+
+          dbg { "#{self.class}#register_handle Async not ready readiness=#{readiness}, handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
         end
+
+      end
+
+      dbg { "#{self.class}#register_handle creates fiber fiber=0x#{task.fiber.object_id.to_s(16)} handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+    end
+
+    def waiting_io(monitor, interest)
+      meth = interest_to_monitor_method(interest)
+      begin
+        monitor.public_send(meth)
+        [monitor.readiness, false]
+      rescue Async::Wrapper::Cancelled => e
+        dbg { "#{self.class}#waiting_io error #{e.class} #{e.message}" }
+        [nil, true]
+      end
+    end
+
+    def interest_to_monitor_method(interest)
+      case interest
+      when :r
+        :wait_readable
+      when :w
+        :wait_writable
+      when :rw
+        :wait_any
+      else
+        raise ArgumentError, "invalid interest #{interest}"
       end
     end
 
@@ -193,12 +260,12 @@ module Virt
       when :w
         'w'
       else
-        nil
+        raise ArgumentError, "invalid interest #{interest}"
       end
     end
 
     def readiness_to_events(readiness)
-      case readiness.to_sym
+      case readiness&.to_sym
       when :rw
         Libvirt::EVENT_HANDLE_READABLE | Libvirt::EVENT_HANDLE_WRITABLE
       when :r
