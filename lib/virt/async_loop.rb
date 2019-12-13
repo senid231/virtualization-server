@@ -183,12 +183,12 @@ module Virt
       end
 
       task = Async do |_task|
-        io_mode = interest_to_io_mode(interest)
-        dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}, fd=#{handle.fd}, io_mode=#{io_mode}" }
-        io = IO.new(handle.fd, io_mode)
+        # io_mode = interest_to_io_mode(interest)
+        dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+        # io = IO.new(handle.fd, io_mode)
         # monitor = @reactor.register(io, interest)
         # @handle_tasks[handle.handle_id] = monitor
-        monitor = Async::Wrapper.new(io)
+        monitor = Async::Wrapper.new(handle.fd)
         @handle_tasks[handle.handle_id] = monitor
 
         readiness = nil
@@ -241,18 +241,18 @@ module Virt
       end
     end
 
-    def interest_to_io_mode(interest)
-      case interest
-      when :rw
-        'a+'
-      when :r
-        'r'
-      when :w
-        'w'
-      else
-        raise ArgumentError, "invalid interest #{interest}"
-      end
-    end
+    # def interest_to_io_mode(interest)
+    #   case interest
+    #   when :rw
+    #     'a+'
+    #   when :r
+    #     'r'
+    #   when :w
+    #     'w'
+    #   else
+    #     raise ArgumentError, "invalid interest #{interest}"
+    #   end
+    # end
 
     def readiness_to_events(readiness)
       case readiness&.to_sym
