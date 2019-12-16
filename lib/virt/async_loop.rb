@@ -10,6 +10,17 @@ module Virt
       # Libvirt::event_invoke_handle_callback (feeding it the handle_id we returned
       # from add_handle, the file descriptor, the new events, and the opaque
       # data that libvirt gave us earlier)
+
+      class Wrapper < Async::Wrapper
+        def close
+          cancel_monitor
+        end
+
+        def readiness
+          monitor&.readiness
+        end
+      end
+
       attr_accessor :handle_id, :fd, :events
       attr_reader :opaque
 
@@ -183,12 +194,10 @@ module Virt
       end
 
       task = Async do |_task|
-        # io_mode = interest_to_io_mode(interest)
+        io_mode = interest_to_io_mode(interest)
         dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
-        # io = IO.new(handle.fd, io_mode)
-        # monitor = @reactor.register(io, interest)
-        # @handle_tasks[handle.handle_id] = monitor
-        monitor = Async::Wrapper.new(handle.fd)
+        io = IO.new(handle.fd, io_mode)
+        monitor = Virt::AsyncLoop::Handle::Wrapper.new(io)
         @handle_tasks[handle.handle_id] = monitor
 
         readiness = nil
@@ -241,18 +250,18 @@ module Virt
       end
     end
 
-    # def interest_to_io_mode(interest)
-    #   case interest
-    #   when :rw
-    #     'a+'
-    #   when :r
-    #     'r'
-    #   when :w
-    #     'w'
-    #   else
-    #     raise ArgumentError, "invalid interest #{interest}"
-    #   end
-    # end
+    def interest_to_io_mode(interest)
+      case interest
+      when :rw
+        'a+'
+      when :r
+        'r'
+      when :w
+        'w'
+      else
+        raise ArgumentError, "invalid interest #{interest}"
+      end
+    end
 
     def readiness_to_events(readiness)
       case readiness&.to_sym
