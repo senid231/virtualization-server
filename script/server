@@ -2,4 +2,4 @@
 
 export RACK_ENV=development
 
-bundle exec rackup --server falcon -p 4567
+bundle exec falcon serve -b http://localhost -p 4567 -n 1 --threaded
