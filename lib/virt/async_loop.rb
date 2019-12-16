@@ -36,11 +36,13 @@ module Virt
       def dispatch(events)
         dbg { "#{self.class}#dispatch handle_id=#{@handle_id}, events=#{events}, fd=#{@fd}" }
 
-        task = Async do |_task|
+        task = Async::Task.new(Async::Task.current.reactor) do
           dbg { "#{self.class}#dispatch Async start handle_id=#{@handle_id} events=#{events}, fd=#{@fd}" }
           Libvirt::event_invoke_handle_callback(@handle_id, @fd, events, @opaque)
           dbg { "#{self.class}#dispatch Async complete handle_id=#{@handle_id} events=#{events}, fd=#{@fd}" }
         end
+        # Async::Task.current.reactor << task.fiber
+        task.run
 
         dbg { "#{self.class}#dispatch creates fiber fiber=0x#{task.fiber.object_id.to_s(16)} handle_id=#{@handle_id}, events=#{events}, fd=#{@fd}" }
       end
@@ -53,6 +55,32 @@ module Virt
       # libvirt via Libvirt::event_invoke_timeout_callback (feeding it the timer_id
       # we returned from add_timer and the opaque data that libvirt gave us
       # earlier)
+
+      class Wrapper
+        class Cancelled < StandardError
+          def initialize
+            super('was cancelled')
+          end
+        end
+
+        attr_reader :timeout, :fiber
+        def initialize(timeout)
+          @timeout = timeout
+          @fiber = nil
+        end
+
+        def wait
+          @fiber = Async::Task.current.fiber
+          Async::Task.current.sleep(timeout)
+          @fiber = nil
+        end
+
+        def close
+          @fiber.resume(Cancelled.new) if @fiber&.alive?
+          @fiber = nil
+        end
+      end
+
       attr_accessor :last_fired, :interval
       attr_reader :timer_id, :opaque
 
@@ -73,11 +101,13 @@ module Virt
       def dispatch
         dbg { "#{self.class}#dispatch timer_id=#{@timer_id}, interval=#{@interval}" }
 
-        task = Async do |_task|
+        task = Async::Task.new(Async::Task.current.reactor) do
           dbg { "#{self.class}#dispatch Async start timer_id=#{@timer_id}, interval=#{@interval}" }
           Libvirt::event_invoke_timeout_callback(@timer_id, @opaque)
           dbg { "#{self.class}#dispatch Async complete timer_id=#{@timer_id}, interval=#{@interval}" }
         end
+        # Async::Task.current.reactor << task.fiber
+        task.run
 
         dbg { "#{self.class}#dispatch creates fiber fiber=0x#{task.fiber.object_id.to_s(16)} timer_id=#{@timer_id}, interval=#{@interval}" }
       end
@@ -153,25 +183,43 @@ module Virt
         return
       end
 
-      timer_task = Async do |_task|
+      task = Async::Task.new(@reactor) do
         dbg { "#{self.class}#register_timer Async start timer_id=#{timer.timer_id}" }
         now_time = Time.now.to_f
         timeout = timer.wait_time > now_time ? timer.wait_time - now_time : 0
-        @reactor.sleep(timeout)
-        dbg { "#{self.class}#register_timer Async start timer_id=#{timer.timer_id}" }
-        timer.last_fired = Time.now.to_f
-        timer.dispatch
+        monitor = Virt::AsyncLoop::Timer::Wrapper.new(timeout)
+        @timer_tasks[timer.timer_id] = monitor
+        cancelled = waiting_timer(monitor)
+
+        if cancelled
+          dbg { "#{self.class}#register_timer Async cancelled timer_id=#{timer.timer_id}" }
+        else
+          dbg { "#{self.class}#register_timer Async start timer_id=#{timer.timer_id}" }
+          timer.last_fired = Time.now.to_f
+          timer.dispatch
+        end
       end
 
-      @timer_tasks[timer.timer_id] = timer_task
+      dbg { "#{self.class}#register_timer creates fiber and runs it fiber=0x#{task.fiber.object_id.to_s(16)} timer_id=#{timer.timer_id}, interval=#{timer.interval}" }
+      task.run
+      dbg { "#{self.class}#register_timer fiber returns control fiber=0x#{task.fiber.object_id.to_s(16)} timer_id=#{timer.timer_id}, interval=#{timer.interval}" }
+
+      # @reactor << task.fiber
+      # dbg { "#{self.class}#register_timer creates fiber for next loop fiber=0x#{task.fiber.object_id.to_s(16)} timer_id=#{timer.timer_id}, interval=#{timer.interval}" }
     end
 
     # @param [Virt::AsyncLoop::Timer]
     def unregister_timer(timer)
       dbg { "#{self.class}#unregister_timer timer_id=#{timer.timer_id}" }
 
-      timer_task = @timer_tasks.delete(timer.timer_id)
-      timer_task.stop if timer_task.alive?
+      monitor = @timer_tasks.delete(timer.timer_id)
+
+      if monitor.nil?
+        dbg { "#{self.class}#unregister_timer already unregistered timer_id=#{timer.timer_id}" }
+        return
+      end
+
+      monitor.close
     end
 
     # @param [Virt::AsyncLoop::Handle]
@@ -193,10 +241,11 @@ module Virt
         return
       end
 
-      task = Async do |_task|
-        io_mode = interest_to_io_mode(interest)
+      task = Async::Task.new(@reactor) do
         dbg { "#{self.class}#register_handle Async start handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
-        io = IO.new(handle.fd, io_mode)
+        io_mode = interest_to_io_mode(interest)
+
+        io = IO.new(handle.fd, io_mode, autoclose: false)
         monitor = Virt::AsyncLoop::Handle::Wrapper.new(io)
         @handle_tasks[handle.handle_id] = monitor
 
@@ -223,7 +272,12 @@ module Virt
 
       end
 
-      dbg { "#{self.class}#register_handle creates fiber fiber=0x#{task.fiber.object_id.to_s(16)} handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+      dbg { "#{self.class}#register_handle creates fiber and runs it fiber=0x#{task.fiber.object_id.to_s(16)} handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+      task.run
+      dbg { "#{self.class}#register_handle fiber returns control fiber=0x#{task.fiber.object_id.to_s(16)} handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
+
+      # @reactor << task.fiber
+      # dbg { "#{self.class}#register_handle creates fiber for next loop fiber=0x#{task.fiber.object_id.to_s(16)} handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
     end
 
     def waiting_io(monitor, interest)
@@ -231,9 +285,20 @@ module Virt
       begin
         monitor.public_send(meth)
         [monitor.readiness, false]
-      rescue Async::Wrapper::Cancelled => e
-        dbg { "#{self.class}#waiting_io error #{e.class} #{e.message}" }
+      rescue Virt::AsyncLoop::Handle::Wrapper::Cancelled => e
+        dbg { "#{self.class}#waiting_io cancelled #{e.class} #{e.message}" }
         [nil, true]
+      end
+    end
+
+    # @return [TrueClass,FalseClass] true if timer was cancelled
+    def waiting_timer(monitor)
+      begin
+        monitor.wait
+        false
+      rescue Virt::AsyncLoop::Timer::Wrapper::Cancelled => e
+        dbg { "#{self.class}#waiting_timer cancelled #{e.class} #{e.message}" }
+        true
       end
     end
 
@@ -299,7 +364,7 @@ module Virt
         dbg { "#{self.class}#unregister_handle already unregistered handle_id=#{handle.handle_id}, fd=#{handle.fd}" }
         return
       end
-      monitor.close unless monitor.closed?
+      monitor.close
     end
 
     def add_handle(fd, events, opaque)
