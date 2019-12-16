@@ -5,13 +5,12 @@ class VirtualMachine
 
   ADAPTER_CLASS = LibvirtAdapter::Domain
 
-  @hash={}
-  @cache=[]
+  class_attribute :_hash, instance_writer: false, default: {}
+  class_attribute :_cache, instance_writer: false, default: []
 
   def self.load_from_hypervisors
-
-    @hash={}
-    @cache=[]
+    self._hash = {}
+    self._cache = []
 
     ADAPTER_CLASS.all.map do |vm|
       v = new(
@@ -24,18 +23,19 @@ class VirtualMachine
         adapter: vm,
         xml: vm.xml
       )
-      @cache.push(v)
-      @hash[vm.id] = v
+      _cache.push(v)
+      _hash[vm.id] = v
     end
-    return @cache
+
+    _cache
   end
 
   def self.all
-    return @cache
+    return _cache
   end
 
   def self.find_by(id:)
-    return @hash[id]
+    return _hash[id]
   end
 
   def self.create(attrs)
@@ -48,11 +48,12 @@ class VirtualMachine
       state: vm.state,
       cpus: vm.cpus,
       memory: vm.memory,
-      adapter: vm
+      adapter: vm,
+      xml: nil
     )
   end
 
-  def initialize(id:, name:, hypervisor:, state: nil, cpus:, memory:, adapter: ADAPTER, xml:)
+  def initialize(id:, name:, hypervisor:, state: nil, cpus:, memory:, adapter:, xml:)
     @id       = id
     @name     = name
     @hypervisor = hypervisor
@@ -63,11 +64,8 @@ class VirtualMachine
     @xml = xml
   end
 
-
   def tags
-
+    nil
   end
-
-
 
 end
