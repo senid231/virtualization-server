@@ -1,5 +1,4 @@
 require 'yaml'
-require 'lib/app_logger'
 require 'lib/hypervisor'
 
 AppLogger.setup_logger(STDOUT, level: Logger::Severity::DEBUG)

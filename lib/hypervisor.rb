@@ -29,30 +29,30 @@ class Hypervisor
 
   class << self
     def load_storage(config)
-      dbg { "#{self.class}.load_storage" }
+      dbg { "#{name}.load_storage" }
       self._storage = Hypervisor::Storage.new(config)
-      dbg { "#{self.class}.load_storage loaded" }
+      dbg { "#{name}.load_storage loaded" }
     end
 
     def all
-      dbg { "#{self.class}.all" }
+      dbg { "#{name}.all" }
       if _storage.nil?
-        dbg { "#{self.class}.all storage not initialized" }
+        dbg { "#{name}.all storage not initialized" }
         return []
       end
       result = _storage.hypervisors
-      dbg { "#{self.class}.all found size=#{result.size}" }
+      dbg { "#{name}.all found size=#{result.size}" }
       result
     end
 
     def find_by(id:)
-      dbg { "#{self.class}.find_by id=#{id}" }
+      dbg { "#{name}.find_by id=#{id}" }
       if _storage.nil?
-        dbg { "#{self.class}.find_by storage not initialized id=#{id}" }
+        dbg { "#{name}.find_by storage not initialized id=#{id}" }
         return
       end
       result = _storage.hypervisors_hash[id]
-      dbg { "#{self.class}.find_by found id=#{result&.id}, name=#{result&.name}, uri=#{result&.uri}" }
+      dbg { "#{name}.find_by found id=#{result&.id}, name=#{result&.name}, uri=#{result&.uri}" }
       result
     end
   end

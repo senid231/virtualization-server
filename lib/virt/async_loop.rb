@@ -86,7 +86,7 @@ module Virt
     end
 
     def self.run
-      dbg "#{self.class}.run"
+      dbg "#{name}.run"
 
       instance = new
       instance.run

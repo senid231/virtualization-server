@@ -1,6 +1,7 @@
 require 'singleton'
 require 'forwardable'
 require 'logger'
+require 'active_support/concern'
 
 class AppLogger
   include Singleton
