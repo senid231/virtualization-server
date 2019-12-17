@@ -134,5 +134,5 @@ class Hypervisor
     c
   end
 
-  include AppLogger::WithDbg
+  include LibvirtAsync::WithDbg
 end

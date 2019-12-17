@@ -1,7 +1,5 @@
-require './lib/app_logger'
 require './config/environment'
 require 'sinatra/jsonapi'
-#~ require 'sinatra/logger'
 
 class VirtualizationServer
   class API < Sinatra::Base

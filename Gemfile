@@ -10,10 +10,12 @@ gem 'pry'
 gem 'sinja'
 gem 'jsonapi-serializers'
 gem 'activesupport'
-gem 'epoll'
-gem 'reentrant_mutex'
-gem 'falcon'#, require: false
-gem 'async'#, require: false
+
+# libvirt event async implementations
+gem 'libvirt_async', '~> 0.1'
+
+# Async web server
+gem 'falcon'
 
 group :development do
   gem 'byebug'

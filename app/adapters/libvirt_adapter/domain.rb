@@ -13,7 +13,7 @@ module LibvirtAdapter
       7 => "suspended by guest power management",
     }
 
-    include ::AppLogger::WithDbg
+    include LibvirtAsync::WithDbg
 
     def self.all
       dbg { "#{name}.all" }
