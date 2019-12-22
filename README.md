@@ -15,7 +15,7 @@ The `/virtual-machines/` namespace is where all CRUD operations for a virtual ma
 Request:
 
 ```
-$ curl -s http://localhost:4567/virtual-machines -H "Accept: application/vnd.api+json"
+$ curl -s http://localhost:4567/api/virtual-machines -H "Accept: application/vnd.api+json"
 ```
 
 Response:
@@ -40,7 +40,7 @@ Response:
 Request:
 
 ```
-$ curl -s http://localhost:4567/virtual-machines/2de02519-c347-432c-9923-3753c3538e02 -H "Accept: application/vnd.api+json"
+$ curl -s http://localhost:4567/api/virtual-machines/2de02519-c347-432c-9923-3753c3538e02 -H "Accept: application/vnd.api+json"
 ```
 
 Response:
@@ -63,7 +63,7 @@ Response:
 Request:
 
 ```
-$ curl -s http://localhost:4567/virtual-machines -X POST -d '{"cpus": 2, "memory": 8388608}' -H "Content-Type: application/vnd.api+json" -H "Accept: application/vnd.api+json"
+$ curl -s http://localhost:4567/api/virtual-machines -X POST -d '{"cpus": 2, "memory": 8388608}' -H "Content-Type: application/vnd.api+json" -H "Accept: application/vnd.api+json"
 ```
 
 Response:
@@ -86,7 +86,7 @@ Response:
 Request:
 
 ```
-$ curl -s http://localhost:4567/virtual-machines/2de02519-c347-432c-9923-3753c3538e02 -X PATCH -d '{"state":"started"}' -H "Content-Type: application/vnd.api+json" -H "Accept: application/vnd.api+json"
+$ curl -s http://localhost:4567/api/virtual-machines/2de02519-c347-432c-9923-3753c3538e02 -X PATCH -d '{"state":"started"}' -H "Content-Type: application/vnd.api+json" -H "Accept: application/vnd.api+json"
 ```
 
 ##### Input
@@ -115,7 +115,7 @@ Response:
 Request:
 
 ```
-$ curl -s http://localhost:4567/virtual-machines/2de02519-c347-432c-9923-3753c3538e02 -X DELETE  -H "Accept: application/vnd.api+json"
+$ curl -s http://localhost:4567/api/virtual-machines/2de02519-c347-432c-9923-3753c3538e02 -X DELETE  -H "Accept: application/vnd.api+json"
 ```
 
 Response:

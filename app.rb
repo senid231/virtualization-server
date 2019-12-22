@@ -1,14 +1,22 @@
-require './config/environment'
+require 'active_support/all'
 require 'sinatra/jsonapi'
+require 'sinatra/custom_logger'
+require_relative 'lib/async_cable'
+require_relative 'config/environment'
 
-class VirtualizationServer
+module VirtualizationServer
   class API < Sinatra::Base
-#   class API < Sinatra::Application
-#     use ::Routes::VirtualMachines
-#     use ::Routes::Hypervisors
-#   end
-#
+    helpers Sinatra::CustomLogger
     register Sinatra::JSONAPI
+
+    configure do
+      enable :logging
+      enable :sessions
+
+      logger =  Logger.new(STDOUT)
+      logger.level = Logger::DEBUG if development?
+      set :logger, logger
+    end
 
     resource :hypervisors do
       helpers do
