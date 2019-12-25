@@ -34,7 +34,7 @@ app = Rack::Builder.new do
     use Rack::Static, urls: %w(/assets /index.html), root: public_folder
 
     run proc { |_| [404, { 'Content-Type' => 'text/plain' }, ['Not Found']] }
-  end
+  end if is_rack_env_development
 
   # Websocket
   map '/cable' do

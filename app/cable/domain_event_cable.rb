@@ -17,26 +17,10 @@ class DomainEventCable < AsyncCable::Connection
   end
 
   def on_data(data)
-    logger.info { "#{self.class}#on_data data=#{data.inspect}" }
-    action = data[:action]
-    if data[:action] == 'screenshot'
-      screenshot_action(data[:payload])
-    else
-      transmit(error: "action #{action} is invalid", status: 400)
-    end
+    logger.info { "#{self.class}#on_data ignored data=#{data.inspect}" }
   end
 
   private
-
-  def screenshot_action(payload)
-    vm_id = payload[:vm_id]
-    vm = VirtualMachine.find_by(id: vm_id)
-    if vm.nil?
-      transmit(error: "vm not found vm_id=#{vm_id}", status: 400)
-    else
-      transmit(action: 'screenshot', response: vm.screenshot)
-    end
-  end
 
   def current_user
     return @current_user if defined?(@current_user)
