@@ -1,15 +1,32 @@
-require_relative 'lib/falcon_patch'
+require 'rack/contrib'
+require_relative 'patches/falcon'
 require_relative 'app'
+require_relative 'patches/sinja'
+require_relative 'lib/vm_screenshot_controller'
 
 rack_env = ENV['RACK_ENV'] || 'development'
+is_rack_env_development = rack_env == 'development'
 logger = Logger.new(STDOUT)
-logger.level = rack_env == 'development' ? :debug : :info
+logger.level = is_rack_env_development ? :debug : :info
+AsyncCable::Server.logger = logger
+DomainEventCable.logger = logger
+VMScreenshotController.logger = logger
 
 app = Rack::Builder.new do
   use Rack::CommonLogger, logger
 
+  use Rack::Session::Cookie,
+      key: '_virtualization.server',
+      secret: VirtualizationServer.config.cookie_secret
+
+  use Rack::Protection::SessionHijacking
+
   map '/api' do
     run VirtualizationServer::API
+  end
+
+  map '/vm_screenshot' do
+    run proc { |env| VMScreenshotController.new(env).call }
   end
 
   map '/' do
@@ -21,9 +38,6 @@ app = Rack::Builder.new do
 
   # Websocket
   map '/cable' do
-    use Rack::CommonLogger, logger
-    AsyncCable::Server.logger = logger
-    DomainEventCable.logger = logger
     run AsyncCable::Server.new(connection_class: DomainEventCable)
   end
 end

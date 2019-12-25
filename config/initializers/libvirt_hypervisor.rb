@@ -1,7 +1,7 @@
-require 'yaml'
-require 'lib/hypervisor'
+require 'libvirt'
 
-puts Libvirt::version()
+libvirt_version, type_version = Libvirt::version()
+puts "Libvirt version=#{libvirt_version} type=#{type_version}"
 
 if ENV['LIBVIRT_DEBUG'].present?
   LibvirtAsync.use_logger!
@@ -10,9 +10,11 @@ end
 
 LibvirtAsync.register_implementations!
 
-clusters = YAML.load_file(File.join(__dir__, '..', 'cluster.yml'))
-Hypervisor.load_storage(clusters)
+Hypervisor.load_storage VirtualizationServer.config.clusters
 
 Hypervisor.all.each do |hv|
-  puts "Hypervisor #{hv.id} #{hv.name} #{hv.uri}"
+  puts "> Hypervisor #{hv.id} #{hv.name} #{hv.uri}"
+  hv.virtual_machines.each do |vm|
+    puts ">> VM #{vm.id} #{vm.name}"
+  end
 end

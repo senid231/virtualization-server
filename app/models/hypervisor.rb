@@ -1,5 +1,3 @@
-require 'libvirt'
-
 class Hypervisor
   include JSONAPI::Serializer
 
@@ -7,57 +5,35 @@ class Hypervisor
               :cpu_model, :cpus, :mhz, :numa_nodes, :cpu_sockets, :cpu_cores, :cpu_threads,
               :total_memory, :free_memory, :capabilities
 
+  attr_reader :virtual_machines
+
   class_attribute :_storage, instance_accessor: false
 
-  class Storage
-    attr_reader :hypervisors_hash, :libvirt_rw
-
-    def initialize(cfg)
-      @hypervisors_hash = {}
-      @libvirt_rw = false
-
-      cfg['hypervisors'].each do |hv|
-        #add to hash for fast lookup
-        @hypervisors_hash[hv["id"]] = Hypervisor.new(hv["id"], hv["name"], hv["uri"])
-      end
-    end
-
-    def hypervisors
-      @hypervisors_hash.values
-    end
-  end
-
   class << self
-    def load_storage(config)
-      dbg { "#{name}.load_storage" }
-      self._storage = Hypervisor::Storage.new(config)
-      dbg { "#{name}.load_storage loaded" }
+    def load_storage(clusters)
+      dbg { "#{name}.load_storage #{clusters}" }
+      self._storage = clusters.map do |cluster|
+        Hypervisor.new(id: cluster['id'], name: cluster['name'], uri: cluster['uri'])
+      end
+      dbg { "#{name}.load_storage loaded size=#{_storage.size}" }
     end
 
     def all
       dbg { "#{name}.all" }
-      if _storage.nil?
-        dbg { "#{name}.all storage not initialized" }
-        return []
-      end
-      result = _storage.hypervisors
+      result = _storage
       dbg { "#{name}.all found size=#{result.size}" }
       result
     end
 
     def find_by(id:)
       dbg { "#{name}.find_by id=#{id}" }
-      if _storage.nil?
-        dbg { "#{name}.find_by storage not initialized id=#{id}" }
-        return
-      end
-      result = _storage.hypervisors_hash[id]
+      result = _storage.detect { |hv| hv.id == id }
       dbg { "#{name}.find_by found id=#{result&.id}, name=#{result&.name}, uri=#{result&.uri}" }
       result
     end
   end
 
-  def initialize(id, name, uri)
+  def initialize(id:, name:, uri:)
     dbg { "#{self.class}#initialize id=#{id}, name=#{name}, uri=#{uri}" }
 
     @id = id
@@ -66,6 +42,7 @@ class Hypervisor
 
     #force connect to initialize events callbacks
     connection
+    load_virtual_machines
   end
 
   def register_connection_event_callbacks(c)
@@ -95,8 +72,15 @@ class Hypervisor
 
   private
 
+  def load_virtual_machines
+    dbg { "#{self.class}#load_virtual_machines id=#{id}, name=#{name}, uri=#{uri}" }
+    @virtual_machines = connection.list_all_domains.map { |vm| VirtualMachine.build(vm, self) }
+    dbg { "#{self.class}#load_virtual_machines loaded size=#{virtual_machines.size} id=#{id}, name=#{name}, uri=#{uri}" }
+  end
+
   def dom_event_callback_reboot(conn, dom, opaque)
     dbg { "#{self.class}#dom_event_callback_reboot id=#{id} conn=#{conn}, dom=#{dom}, opaque=#{opaque}" }
+    DomainEventCable.broadcast(type: 'domain_reboot', data: { id: dom.uuid })
   end
 
   def _open_connection(register_events = false)
@@ -110,7 +94,7 @@ class Hypervisor
 
     dbg { "#{self.class}#_open_connection Connected name=#{name} id=#{id}, uri=#{uri}" }
 
-    #~ c.keepalive = [10, 2]
+    c.keepalive = [10, 2]
 
     @version = c.version
     @libversion = c.libversion

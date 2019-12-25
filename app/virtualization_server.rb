@@ -1,15 +1,20 @@
 module VirtualizationServer
-  def libvirt_domain_type
-    @libvirt_domain_type
-  end
-
-  def libvirt_domain_type=(val)
-    @libvirt_domain_type = val
+  class Config < Anyway::Config
+    config_name :app # set load path config/app.yml
+    attr_config :cookie_secret, :libvirt_domain_type, :clusters, :users
   end
 
   def environment
-    ENV.fetch('RACK_ENV')
+    ENV.fetch('RACK_ENV') { 'development' }
   end
 
-  module_function :libvirt_domain_type, :libvirt_domain_type=, :environment
+  def config
+    @config ||= Config.new
+  end
+
+  def configure
+    yield config
+  end
+
+  module_function :config, :configure, :environment
 end

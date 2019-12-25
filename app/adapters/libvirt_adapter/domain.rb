@@ -128,6 +128,12 @@ module LibvirtAdapter
       domain.max_memory
     end
 
+    def screenshot
+      # filename = "/tmp/libvirt_domain_#{id}.png"
+      stream = Libvirt::Stream.new
+      domain.screenshot(stream, 0)
+    end
+
     private
 
     attr_reader :domain

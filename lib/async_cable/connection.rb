@@ -35,14 +35,14 @@ module AsyncCable
 
     # Transmits data to client
     def transmit(data)
-      logger.debug { "#{self.class}#transmit identifier=#{identifier} data=#{data.inspect}" }
+      logger.debug { "#{self.class}#transmit data=#{data.inspect}" }
 
       write(data)
       flush
     end
 
     def handle_command(data)
-      logger.debug { "#{self.class}#handle_command identifier=#{identifier} data=#{data.inspect}" }
+      logger.debug { "#{self.class}#handle_command data=#{data.inspect}" }
       on_data(data)
     end
 
