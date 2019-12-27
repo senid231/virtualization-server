@@ -14,13 +14,43 @@ class DomainEventCable < AsyncCable::Connection
     logger.debug { "#{self.class}#on_open user_id=#{session['user_id']}" }
     raise AsyncCable::Errors::Unauthorized if current_user.nil?
     logger.debug { "#{self.class}#on_open authorized login=#{current_user.login}" }
+    @cancel_procs = []
   end
 
   def on_data(data)
-    logger.info { "#{self.class}#on_data ignored data=#{data.inspect}" }
+    logger.info { "#{self.class}#on_data data=#{data.inspect}" }
+    if data[:type] =='screenshot'
+      take_screenshot(data)
+    else
+      transmit error: 'invalid type', type: data[:type]
+    end
+  end
+
+  def on_close
+    @cancel_procs.each(&:call)
   end
 
   private
+
+  def take_screenshot(data)
+    vm = VirtualMachine.find_by id: data[:id]
+    if vm.nil?
+      transmit error: 'invalid id', type: data[:type]
+      return
+    end
+
+    FileUtils.mkdir_p File.join(VirtualizationServer.config.root, 'public', 'screenshots')
+    asset_path = "/screenshots/#{vm.id}.png"
+    os_path = File.join(VirtualizationServer.config.root, 'public', asset_path)
+    cancel_proc = nil
+    cancel_proc = vm.take_screenshot(os_path) do |success, _filename, reason|
+      @cancel_procs.delete(cancel_proc)
+      payload = data.slice(:type)
+      payload.merge! success ? { file: asset_path } : { error: reason }
+      transmit(payload)
+    end
+    @cancel_procs.push(cancel_proc)
+  end
 
   def current_user
     return @current_user if defined?(@current_user)

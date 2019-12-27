@@ -62,7 +62,10 @@ class VirtualMachine
     nil
   end
 
-  def screenshot
-    @adapter.screenshot
+  # @param filename [String] path where screenshot will be uploaded.
+  # @yield on complete or error (args: success [Boolean], filename [String]).
+  # @return [Proc] function that will cancel screenshot taking.
+  def take_screenshot(filename, &block)
+    @adapter.take_screenshot(filename, &block)
   end
 end

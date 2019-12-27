@@ -45,17 +45,8 @@ class Hypervisor
     load_virtual_machines
   end
 
-  def register_connection_event_callbacks(c)
-    dbg { "#{self.class}#register_connection_event_callbacks id=#{id}, name=#{name}, uri=#{uri}" }
-    c.domain_event_register_any(
-        Libvirt::Connect::DOMAIN_EVENT_ID_REBOOT,
-        method(:dom_event_callback_reboot).to_proc
-    )
-    dbg { "#{self.class}#register_connection_event_callbacks finished id=#{id}, name=#{name}, uri=#{uri}" }
-  end
-
   def connection
-    dbg { "#{self.class}#connection #{@connection.nil? ? 'absent' : 'present'} id=#{@connection}, name=#{name}, uri=#{uri}" }
+    dbg { "#{self.class}#connection #{@connection.nil? ? 'absent' : 'present'}, id=#{id}, name=#{name}, uri=#{uri}" }
     @connection ||= _open_connection(true)
   end
 
@@ -70,6 +61,10 @@ class Hypervisor
     }
   end
 
+  def create_stream
+    connection.stream(Libvirt::Stream::NONBLOCK)
+  end
+
   private
 
   def load_virtual_machines
@@ -78,13 +73,8 @@ class Hypervisor
     dbg { "#{self.class}#load_virtual_machines loaded size=#{virtual_machines.size} id=#{id}, name=#{name}, uri=#{uri}" }
   end
 
-  def dom_event_callback_reboot(conn, dom, opaque)
-    dbg { "#{self.class}#dom_event_callback_reboot id=#{id} conn=#{conn}, dom=#{dom}, opaque=#{opaque}" }
-    DomainEventCable.broadcast(type: 'domain_reboot', data: { id: dom.uuid })
-  end
-
   def _open_connection(register_events = false)
-    if self.class._storage&.libvirt_rw
+    if VirtualizationServer.config.libvirt_rw
       dbg { "#{self.class}#_open_connection Opening RW connection to name=#{name} id=#{id}, uri=#{uri}" }
       c = Libvirt::open(uri)
     else
@@ -94,7 +84,7 @@ class Hypervisor
 
     dbg { "#{self.class}#_open_connection Connected name=#{name} id=#{id}, uri=#{uri}" }
 
-    c.keepalive = [10, 2]
+    # c.keepalive = [10, 2]
 
     @version = c.version
     @libversion = c.libversion
@@ -113,9 +103,31 @@ class Hypervisor
     @total_memory = node_info.memory
     @free_memory = node_info.memory
 
-    register_connection_event_callbacks(c) if register_events
+    register_dom_event_callbacks(c)
 
     c
+  end
+
+  def register_dom_event_callbacks(c)
+    c.domain_event_register_any(
+        Libvirt::Connect::DOMAIN_EVENT_ID_REBOOT,
+        method(:dom_event_callback_reboot).to_proc
+    )
+
+    c.domain_event_register_any(
+        Libvirt::Connect::DOMAIN_EVENT_ID_LIFECYCLE,
+        method(:dom_event_callback_lifecycle).to_proc
+    )
+  end
+
+  def dom_event_callback_reboot(_conn, dom, _opaque)
+    dbg { "#{self.class}#dom_event_callback_reboot id=#{id} dom.uuid=#{dom.uuid}" }
+    DomainEventCable.broadcast(type: 'domain_reboot', id: dom.uuid)
+  end
+
+  def dom_event_callback_lifecycle(_conn, dom, event, detail, _opaque)
+    dbg { "#{self.class}#dom_event_callback_reboot id=#{id} dom.uuid=#{dom.uuid}" }
+    DomainEventCable.broadcast(type: 'domain_lifecycle', id: dom.uuid, event: event, detail: detail)
   end
 
   include LibvirtAsync::WithDbg

@@ -12,6 +12,7 @@ module LibvirtAdapter
       6 => "crashed",
       7 => "suspended by guest power management",
     }
+    ScreenshotCallback = Struct.new(:file, :callback, :tmp_filename, :filename)
 
     include LibvirtAsync::WithDbg
 
@@ -128,14 +129,75 @@ module LibvirtAdapter
       domain.max_memory
     end
 
-    def screenshot
-      # filename = "/tmp/libvirt_domain_#{id}.png"
-      stream = Libvirt::Stream.new
-      domain.screenshot(stream, 0)
+    # @param filename [String] path where screenshot will be uploaded.
+    # @yield on complete or error (args: success [Boolean], filename [String]).
+    # @return [Proc] function that will cancel screenshot taking.
+    def take_screenshot(filename, &block)
+      tmp_filename = "#{filename}.tmp"
+
+      dbg { "#{self.class}#screenshot id=#{id}" }
+      stream = hypervisor.create_stream
+      mime_type = domain.screenshot(stream, 0)
+      file = File.open(tmp_filename, 'wb')
+      dbg { "#{self.class}#screenshot initiated id=#{id} mime_type=#{mime_type} filename=#{tmp_filename}" }
+
+      stream.event_add_callback(
+          Libvirt::Stream::EVENT_READABLE,
+          method(:screenshot_callback).to_proc,
+          ScreenshotCallback.new(file, block, tmp_filename, filename)
+      )
+      dbg { "#{self.class}#screenshot callback added id=#{id}" }
+
+      proc do
+        dbg { "#{self.class}#screenshot cancel id=#{id}" }
+        file.close
+        stream.event_remove_callback
+        stream.finish
+      end
     end
 
     private
 
     attr_reader :domain
+
+    # @param stream [Libvirt::Stream]
+    # @param events [Integer]
+    # @param opaque [ScreenshotCallback] file: File, callback: Proc, tmp_filename: String, filename: string.
+    # def screenshot_callback(stream, events, opaque)
+    def screenshot_callback(stream, events, opaque)
+      dbg { "#{self.class}#screenshot_callback id=#{id} events=#{events}" }
+      return unless (Libvirt::Stream::EVENT_READABLE & events) != 0
+
+      begin
+        code, data = stream.recv(1024)
+      rescue Libvirt::Error => e
+        dbg { "<#{e.class}>: #{e.message}\n #{e.backtrace.join("\n")}" }
+        opaque.file.close
+        stream.finish
+        opaque.callback.call(true, opaque.tmp_filename, "#{e.class} #{e.message}")
+        return
+      end
+      dbg { "#{self.class}#screenshot_callback recv id=#{id} code=#{code} size=#{data&.size}" }
+
+      case code
+      when 0
+        dbg { "#{self.class}#screenshot_callback finished id=#{id}" }
+        opaque.file.close
+        stream.finish
+        FileUtils.move(opaque.tmp_filename, opaque.filename)
+        opaque.callback.call(true, opaque.filename, nil)
+      when -1
+        dbg { "#{self.class}#screenshot_callback error id=#{id}" }
+        opaque.file.close
+        stream.finish
+        opaque.callback.call(false, opaque.tmp_filename, 'error code -1 received')
+      when -2
+        dbg { "#{self.class}#screenshot_callback is not ready id=#{id}" }
+      else
+        dbg { "#{self.class}#screenshot_callback ready id=#{id}" }
+        opaque.file.write(data)
+      end
+    end
+
   end
 end
