@@ -31,7 +31,7 @@ app = Rack::Builder.new do
 
   map '/' do
     public_folder = File.join(__dir__, 'public')
-    use Rack::Static, urls: %w(/assets /index.html), root: public_folder
+    use Rack::Static, urls: %w(/assets /screenshots /index.html), root: public_folder
 
     run proc { |_| [404, { 'Content-Type' => 'text/plain' }, ['Not Found']] }
   end if is_rack_env_development

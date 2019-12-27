@@ -135,12 +135,6 @@ tryApiBtn.addEventListener('click', function (event) {
 screenshotBtn.addEventListener('click', function (event) {
   event.preventDefault();
   let vmId = screenshotInput.value;
-  console.log('vm_screenshot', vmId);
-  sendXhr({
-    method: 'GET',
-    url: '/vm_screenshot?id=' + vmId,
-    onResponse: function ({status, response, }) {
-      console.log('vm_screenshot response', status, response,);
-    }
-  })
-})
+  console.log('vm screenshot', vmId);
+  MainApp.socket.send({ type: 'screenshot', id: vmId });
+});

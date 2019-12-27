@@ -39,7 +39,6 @@ class DomainEventCable < AsyncCable::Connection
       return
     end
 
-    FileUtils.mkdir_p File.join(VirtualizationServer.config.root, 'public', 'screenshots')
     asset_path = "/screenshots/#{vm.id}.png"
     os_path = File.join(VirtualizationServer.config.root, 'public', asset_path)
     cancel_proc = nil
