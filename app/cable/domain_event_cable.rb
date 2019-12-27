@@ -27,7 +27,7 @@ class DomainEventCable < AsyncCable::Connection
   end
 
   def on_close
-    @cancel_procs.each(&:call)
+    @cancel_procs&.each(&:call)
   end
 
   private
