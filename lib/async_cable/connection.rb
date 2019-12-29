@@ -62,5 +62,13 @@ module AsyncCable
     def clean_close?
       close_code == Protocol::WebSocket::Error::NO_ERROR
     end
+
+    def to_s
+      "#<#{self.class}:0x#{object_id.to_s(16)}>"
+    end
+
+    def inspect
+      to_s
+    end
   end
 end

@@ -20,12 +20,15 @@ module AsyncCable
 
         connection.close_code = nil
       rescue Protocol::WebSocket::ClosedError => error
-        logger.debug { "#{self.class} connection receives ClosedError message=#{error.message} code=#{error.code}" }
+        logger.debug { "#{self.class} #{connection.to_s} receives ClosedError message=#{error.message} code=#{error.code}" }
         connection.close_code = error.code
       rescue AsyncCable::Errors::Unauthorized => error
-        logger.debug { "#{self.class} connection receives Unauthorized" }
+        logger.debug { "#{self.class} #{connection.to_s} connection receives Unauthorized" }
         connection.close_code = error.code
         connection.send_close(error.code, error.message)
+      rescue EOFError => e
+        logger.debug { "#{self.class} #{connection.to_s} #{e.class} #{e.message}" }
+        connection.close_code = 1111
       ensure
         logger.debug { "#{self.class} connection closed" }
         connection.handle_close
