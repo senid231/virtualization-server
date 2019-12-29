@@ -2,7 +2,6 @@ require 'rack/contrib'
 require_relative 'patches/falcon'
 require_relative 'app'
 require_relative 'patches/sinja'
-require_relative 'lib/vm_screenshot_controller'
 
 rack_env = ENV['RACK_ENV'] || 'development'
 is_rack_env_development = rack_env == 'development'
@@ -10,7 +9,6 @@ logger = Logger.new(STDOUT)
 logger.level = is_rack_env_development ? :debug : :info
 AsyncCable::Server.logger = logger
 DomainEventCable.logger = logger
-VMScreenshotController.logger = logger
 
 app = Rack::Builder.new do
   use Rack::CommonLogger, logger
@@ -23,10 +21,6 @@ app = Rack::Builder.new do
 
   map '/api' do
     run VirtualizationServer::API
-  end
-
-  map '/vm_screenshot' do
-    run proc { |env| VMScreenshotController.new(env).call }
   end
 
   map '/' do
