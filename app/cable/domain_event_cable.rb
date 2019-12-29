@@ -11,23 +11,31 @@ class DomainEventCable < AsyncCable::Connection
   #
 
   def on_open
-    logger.debug { "#{self.class}#on_open user_id=#{session['user_id']}" }
+    logger.debug { "#{to_s}#on_open user_id=#{session['user_id']}" }
     raise AsyncCable::Errors::Unauthorized if current_user.nil?
-    logger.debug { "#{self.class}#on_open authorized login=#{current_user.login}" }
-    @cancel_procs = []
+    logger.debug { "#{to_s}#on_open authorized login=#{current_user.login}" }
   end
 
   def on_data(data)
-    logger.info { "#{self.class}#on_data data=#{data.inspect}" }
-    if data[:type] =='screenshot'
+    logger.info { "#{to_s}#on_data data=#{data.inspect}" }
+    if data[:type] == 'screenshot'
       take_screenshot(data)
+    elsif data[:type] == 'ping'
+      # ignore
     else
       transmit error: 'invalid type', type: data[:type]
     end
   end
 
   def on_close
-    @cancel_procs&.each(&:call)
+    task = LibvirtAsync::Util.create_task do
+      streams.each(&:cancel)
+    end
+    Async::Task.current.reactor << task
+  end
+
+  def to_s
+    "#<#{self.class}:0x#{object_id.to_s(16)} @current_user_id=#{current_user&.id}>"
   end
 
   private
@@ -35,20 +43,25 @@ class DomainEventCable < AsyncCable::Connection
   def take_screenshot(data)
     vm = VirtualMachine.find_by id: data[:id]
     if vm.nil?
-      transmit error: 'invalid id', type: data[:type]
+      transmit error: 'invalid id', type: 'screenshot', id: data[:id]
       return
     end
 
-    asset_path = "/screenshots/#{vm.id}.png"
-    os_path = File.join(VirtualizationServer.config.root, 'public', asset_path)
-    cancel_proc = nil
-    cancel_proc = vm.take_screenshot(os_path) do |success, _filename, reason|
-      @cancel_procs.delete(cancel_proc)
-      payload = data.slice(:type)
-      payload.merge! success ? { file: asset_path } : { error: reason }
-      transmit(payload)
+    asset_path = "/screenshots/#{vm.id}.pnm"
+    file_path = File.join VirtualizationServer.config.root, 'public', asset_path
+
+    stream = nil
+    stream = LibvirtAsync::ScreenshotStream.call(vm.hypervisor.connection, vm.adapter.domain) do |success, reason, file|
+      if success
+        FileUtils.mv file.path, file_path
+        transmit file: asset_path, type: 'screenshot', id: data[:id]
+      else
+        transmit error: reason, type: 'screenshot', id: data[:id]
+      end
+      streams.delete(stream)
     end
-    @cancel_procs.push(cancel_proc)
+
+    streams.push(stream)
   end
 
   def current_user
@@ -58,5 +71,9 @@ class DomainEventCable < AsyncCable::Connection
 
   def session
     env['rack.session']
+  end
+
+  def streams
+    @streams ||= []
   end
 end

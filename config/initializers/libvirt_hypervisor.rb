@@ -1,4 +1,6 @@
 require 'libvirt'
+require 'libvirt_async'
+require_relative '../../lib/libvirt_async/screenshot_stream'
 
 libvirt_version, type_version = Libvirt::version()
 puts "Libvirt version=#{libvirt_version} type=#{type_version}"

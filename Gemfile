@@ -36,5 +36,7 @@ end
 
 group :test do
   gem 'rspec'
+  gem 'httparty'
+  gem 'websocket-client-simple'
 end
 

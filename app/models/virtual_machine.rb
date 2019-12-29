@@ -1,7 +1,7 @@
 class VirtualMachine
   extend Forwardable
 
-  attr_reader :id, :name, :cpus, :memory, :state, :hypervisor, :xml
+  attr_reader :id, :name, :cpus, :memory, :state, :hypervisor, :xml, :adapter
 
   ADAPTER_CLASS = LibvirtAdapter::Domain
 

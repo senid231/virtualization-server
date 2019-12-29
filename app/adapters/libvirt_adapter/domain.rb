@@ -12,7 +12,6 @@ module LibvirtAdapter
       6 => "crashed",
       7 => "suspended by guest power management",
     }
-    ScreenshotCallback = Struct.new(:file, :callback, :tmp_filename, :filename)
 
     include LibvirtAsync::WithDbg
 
@@ -54,6 +53,8 @@ module LibvirtAdapter
     #   domain  = CLIENT.define_domain_xml(factory.to_xml)
     #   new(domain)
     # end
+
+    attr_reader :domain
 
     def initialize(domain, hypervisor)
       @domain = domain
@@ -154,11 +155,11 @@ module LibvirtAdapter
         stream.event_remove_callback
         stream.finish
       end
+    rescue Libvirt::Error => e
+      block.call(false, tmp_filename, "#{e.class} #{e.message}")
     end
 
     private
-
-    attr_reader :domain
 
     # @param stream [Libvirt::Stream]
     # @param events [Integer]
@@ -168,15 +169,7 @@ module LibvirtAdapter
       dbg { "#{self.class}#screenshot_callback id=#{id} events=#{events}" }
       return unless (Libvirt::Stream::EVENT_READABLE & events) != 0
 
-      begin
-        code, data = stream.recv(1024)
-      rescue Libvirt::Error => e
-        dbg { "<#{e.class}>: #{e.message}\n #{e.backtrace.join("\n")}" }
-        opaque.file.close
-        stream.finish
-        opaque.callback.call(true, opaque.tmp_filename, "#{e.class} #{e.message}")
-        return
-      end
+      code, data = stream.recv(1024)
       dbg { "#{self.class}#screenshot_callback recv id=#{id} code=#{code} size=#{data&.size}" }
 
       case code
@@ -190,13 +183,19 @@ module LibvirtAdapter
         dbg { "#{self.class}#screenshot_callback error id=#{id}" }
         opaque.file.close
         stream.finish
-        opaque.callback.call(false, opaque.tmp_filename, 'error code -1 received')
+        opaque.callback.call(false, nil, 'error code -1 received')
       when -2
         dbg { "#{self.class}#screenshot_callback is not ready id=#{id}" }
       else
         dbg { "#{self.class}#screenshot_callback ready id=#{id}" }
         opaque.file.write(data)
       end
+
+    rescue Libvirt::Error => e
+      dbg { "<#{e.class}>: #{e.message}\n #{e.backtrace.join("\n")}" }
+      opaque.file.close
+      stream.finish
+      opaque.callback.call(false, nil, "#{e.class} #{e.message}")
     end
 
   end

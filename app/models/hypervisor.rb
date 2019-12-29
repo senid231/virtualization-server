@@ -61,10 +61,6 @@ class Hypervisor
     }
   end
 
-  def create_stream
-    connection.stream(Libvirt::Stream::NONBLOCK)
-  end
-
   private
 
   def load_virtual_machines
