@@ -11,7 +11,7 @@ module AsyncCable
     end
 
     def call(env)
-      result = Async::WebSocket::Adapters::Rack.open(env, handler: @connection_class) do |connection|
+      response = Async::WebSocket::Adapters::Rack.open(env, handler: @connection_class) do |connection|
         connection.handle_open(env)
 
         while (data = connection.read)
@@ -31,7 +31,10 @@ module AsyncCable
         connection.handle_close
         connection.close
       end
-      result || [200, {}, ['Hello World']]
+      # Transform headers from Protocol::HTTP::Headers::Merged into Hash.
+      # It will prevent other middleware from crash because everybody works with headers like with a Hash.
+      response[1] = response[1].to_a.to_h unless response.nil?
+      response || [200, {}, ['Hello World']]
     end
   end
 end
