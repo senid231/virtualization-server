@@ -58,23 +58,50 @@ let sendJsonApi = function({ method, url, payload, onResponse }) {
   })
 }
 
-window.MainApp = { socket: null };
+window.MainApp = { socket: null, login: null, reloadWebsocket: null };
 
-MainApp.socket = socketWrapper({
-  url: "ws://localhost:4567/cable",
-  onOpen: function () {
-    console.log("WebSocket connected");
-  },
-  onClose: function(event) {
-    console.log("WebSocket connection closed", event.wasClean ? 'clean' : 'dirty', event.code, event.reason);
-  },
-  onError: function(error) {
-    console.log("WebSocket error " + error.message);
-  },
-  onData: function (data) {
-    console.log("WebSocket data received", data);
+MainApp.reloadWebsocket = function () {
+  if (MainApp.socket) MainApp.socket.close(1000, 'reconnect');
+
+  MainApp.socket = socketWrapper({
+    url: "ws://localhost:4567/cable",
+    onOpen: function () {
+      console.log("WebSocket connected");
+      websocketStatusNode.textContent = 'connected';
+    },
+    onClose: function(event) {
+      console.log("WebSocket connection closed", event.wasClean ? 'clean' : 'dirty', event.code, event.reason);
+      websocketStatusNode.textContent = 'not connected';
+    },
+    onError: function(error) {
+      console.log("WebSocket error " + error.message);
+    },
+    onData: function (data) {
+      console.log("WebSocket data received", data);
+    }
+  });
+};
+
+MainApp.login = function (login, password, successCallback) {
+  let payload = {
+    data: {
+      type: 'sessions',
+      attributes: { login, password }
+    }
   }
-});
+  console.log('login as', login);
+  sendJsonApi({
+    method: 'POST',
+    url: '/api/sessions',
+    payload,
+    onResponse: function ({ response, status }) {
+      console.log('login response', status, response);
+      if (status === 201 && successCallback) {
+        successCallback();
+      }
+    }
+  });
+}
 
 let loginBtn = document.querySelector('.js-login-btn');
 let logoutBtn = document.querySelector('.js-logout-btn');
@@ -83,27 +110,13 @@ let passwordInput = document.querySelector('.js-password-input');
 let tryApiBtn = document.querySelector('.js-try-api-btn');
 let screenshotBtn = document.querySelector('.js-screenshot-btn');
 let screenshotInput = document.querySelector('.js-screenshot-input');
+let websocketBtn = document.querySelector('.js-websocket-btn');
+let websocketStatusNode = document.querySelector('.js-websocket-status');
 
 loginBtn.addEventListener('click', function (event) {
   event.preventDefault();
-  let payload = {
-    data: {
-      type: 'sessions',
-      attributes: {
-        login: loginInput.value,
-        password: passwordInput.value
-      }
-    }
-  }
-  console.log('login as', payload.attributes);
-  sendJsonApi({
-    method: 'POST',
-    url: '/api/sessions',
-    payload,
-    onResponse: function ({ response, status }) {
-      console.log('login response', status, response);
-    }
-  });
+  MainApp.login(loginInput.value, passwordInput.value);
+  MainApp.reloadWebsocket();
 });
 
 logoutBtn.addEventListener('click', function (event) {
@@ -138,3 +151,13 @@ screenshotBtn.addEventListener('click', function (event) {
   console.log('vm screenshot', vmId);
   MainApp.socket.send({ type: 'screenshot', id: vmId });
 });
+
+websocketBtn.addEventListener('click', function (event) {
+  event.preventDefault();
+  console.log('reload websocket');
+  MainApp.reloadWebsocket();
+});
+
+// MainApp.login('admin', 'password');
+// MainApp.socket.send({ type: 'screenshot', id: 'vm_id });
+// MainApp.reloadWebsocket();
