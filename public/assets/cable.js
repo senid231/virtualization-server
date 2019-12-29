@@ -67,11 +67,15 @@ MainApp.reloadWebsocket = function () {
     url: "ws://localhost:4567/cable",
     onOpen: function () {
       console.log("WebSocket connected");
+      websocketStatusNode.classList.remove('red');
+      websocketStatusNode.classList.add('green');
       websocketStatusNode.textContent = 'connected';
     },
     onClose: function(event) {
       console.log("WebSocket connection closed", event.wasClean ? 'clean' : 'dirty', event.code, event.reason);
       websocketStatusNode.textContent = 'not connected';
+      websocketStatusNode.classList.remove('green');
+      websocketStatusNode.classList.add('red');
     },
     onError: function(error) {
       console.log("WebSocket error " + error.message);
