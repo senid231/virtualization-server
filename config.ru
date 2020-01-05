@@ -1,4 +1,5 @@
 require 'rack/contrib'
+require 'async_cable'
 require_relative 'patches/falcon'
 require_relative 'app'
 require_relative 'patches/sinja'
@@ -7,8 +8,7 @@ rack_env = ENV['RACK_ENV'] || 'development'
 is_rack_env_development = rack_env == 'development'
 logger = Logger.new(STDOUT)
 logger.level = is_rack_env_development ? :debug : :info
-AsyncCable::Server.logger = logger
-DomainEventCable.logger = logger
+AsyncCable.config.logger = logger
 
 app = Rack::Builder.new do
   use Rack::CommonLogger, logger

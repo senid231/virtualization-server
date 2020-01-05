@@ -1,7 +1,6 @@
 require 'active_support/all'
 require 'sinatra/jsonapi'
 require 'sinatra/custom_logger'
-require_relative 'lib/async_cable'
 require_relative 'config/environment'
 
 VirtualizationServer.config.root = File.absolute_path(__dir__)

@@ -10,9 +10,13 @@ class DomainEventCable < AsyncCable::Connection
   #   socket.close( 1000, 'client' );
   #
 
+  identified_as :domain_event
+  delegate :session, to: :request
+
   def on_open
     logger.debug { "#{to_s}#on_open user_id=#{session['user_id']}" }
-    raise AsyncCable::Errors::Unauthorized if current_user.nil?
+    reject_unauthorized if current_user.nil?
+    stream_for current_user.login
     logger.debug { "#{to_s}#on_open authorized login=#{current_user.login}" }
   end
 
@@ -31,46 +35,51 @@ class DomainEventCable < AsyncCable::Connection
     task = LibvirtAsync::Util.create_task do
       streams.each(&:cancel)
     end
-    Async::Task.current.reactor << task
-  end
-
-  def to_s
-    "#<#{self.class}:0x#{object_id.to_s(16)} @current_user_id=#{current_user&.id}>"
+    Async::Task.current.reactor << task.fiber
   end
 
   private
 
   def take_screenshot(data)
     vm = VirtualMachine.find_by id: data[:id]
+
     if vm.nil?
       transmit error: 'invalid id', type: 'screenshot', id: data[:id]
       return
     end
 
-    asset_path = "/screenshots/#{vm.id}.pnm"
-    file_path = File.join VirtualizationServer.config.root, 'public', asset_path
+    file = Tempfile.new("screenshot_#{vm.adapter.domain.uuid}", nil, mode: File::Constants::BINARY)
+    stream = LibvirtAsync::StreamRead.new(vm.hypervisor.connection, file)
 
-    stream = nil
-    stream = LibvirtAsync::ScreenshotStream.call(vm.hypervisor.connection, vm.adapter.domain) do |success, reason, file|
-      if success
-        FileUtils.mv file.path, file_path
-        transmit file: asset_path, type: 'screenshot', id: data[:id]
-      else
-        transmit error: reason, type: 'screenshot', id: data[:id]
-      end
+    mime_type = vm.adapter.domain.screenshot(stream.stream, 0)
+    logger.debug { "#{to_s}#take_screenshot initiated mime_type=#{mime_type}, file_path=#{file.path}" }
+
+    stream.call do |success, reason, io|
+      logger.debug { "#{to_s}#take_screenshot finish" }
       streams.delete(stream)
+      on_stream_finish success, reason, io, domain_id: data[:id]
     end
 
     streams.push(stream)
   end
 
+  def on_stream_finish(success, reason, file, domain_id:)
+    file.close
+
+    unless success
+      transmit(error: reason, type: 'screenshot', id: domain_id)
+      return
+    end
+
+    asset_path = "/screenshots/#{domain_id}.pnm"
+    file_path = File.join(VirtualizationServer.config.root, 'public', asset_path)
+    FileUtils.mv(file.path, file_path)
+    transmit(file: asset_path, type: 'screenshot', id: domain_id)
+  end
+
   def current_user
     return @current_user if defined?(@current_user)
     @current_user = User.find_by id: session['user_id']
-  end
-
-  def session
-    env['rack.session']
   end
 
   def streams

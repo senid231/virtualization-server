@@ -34,6 +34,11 @@ received = []
 closed = false
 ws = WebSocket::Client::Simple.connect 'ws://localhost:4567/cable', headers: ws_headers
 
+at_exit do
+  ws.close rescue nil
+  puts 'Exited.'
+end
+
 ws.on :message do |msg|
   puts 'Websocket on message'
   puts msg.data.inspect
@@ -59,7 +64,8 @@ end
 # loop { ws.send STDIN.gets.strip }
 
 sleep 1
-ws_body = { type: 'screenshot', id: '568bb800-a988-458a-b62f-0026a6f990f6' }.to_json
+domain_uuid = ARGV[0]
+ws_body = { type: 'screenshot', id: domain_uuid }.to_json
 puts "Websocket send #{ws_body}"
 ws.send(ws_body)
 
@@ -68,5 +74,3 @@ while !closed do
   sleep 1
   ws.send('{"type":"ping"}')
 end
-
-puts 'Exit'

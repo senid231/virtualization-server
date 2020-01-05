@@ -5,7 +5,14 @@ ruby '2.6.0'
 
 gem 'dotenv'
 gem 'sinatra'
-gem 'ruby-libvirt'
+
+# https://bugzilla.redhat.com/show_bug.cgi?id=1787914
+# Use patched version of gem until issue resolved.
+#   $ gem install ./ruby-libvirt-0.7.2.pre.streamfix.gem
+#   $ bundle install
+#
+gem 'ruby-libvirt', '0.7.2.pre.streamfix'
+
 gem 'pry'
 gem 'sinja'
 gem 'jsonapi-serializers'
@@ -22,6 +29,8 @@ gem 'falcon'
 # Async websocket implementation
 # https://github.com/socketry/async-websocket
 gem 'async-websocket'
+
+gem 'async_cable'
 
 # Ruby libraries and applications configuration on steroids!
 # https://github.com/palkan/anyway_config
